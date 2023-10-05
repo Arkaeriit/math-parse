@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 const MATH_CHARS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
 
 #[derive(Debug, PartialEq)]
@@ -185,18 +187,35 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
     Ok(())
 }
 
+/// Take a line of MathValue and replace each value found with a number.
 fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
     for i in 0..line.len() {
         if let Name(name) = &line[i] {
-            let converted = if name.len() > 3 && &name[0..2] == "0x" {
-                i64::from_str_radix(&name[2..], 16)
-            } else {
-                i64::from_str_radix(&name, 10)
-            };
-            if let Ok(num) = converted {
-                line[i] = Value(num);
-            } else {
-                return Err(format!("Unable to format {} into a number", name));
+            line[i] = number_from_string(name)?
+        }
+    }
+    Ok(())
+}
+
+/// Reads all Names from a line of math and transform any name being a key in
+/// the map to it's value. Keeps trying with the result and then, try to make
+/// it into a number.
+/// If map is None, nothing is done.
+fn read_named_variables(line: &mut [MathValue], map: Option<HashMap<String, String>>) -> Result<(), String> {
+    let map = if let Some(m) = map {
+        m
+    } else {
+        return Ok(());
+    };
+
+    for i in 0..line.len() {
+        if let Name(name) = &line[i] {
+            if let Some(mut new_name) = map.get(name) {
+                while let Some(newer_name) = map.get(new_name) {
+                    // TODO: check for math char
+                    new_name = newer_name;
+                }
+                line[i] = number_from_string(&new_name)?;
             }
         }
     }
@@ -213,6 +232,20 @@ fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
         }
     }
     false
+}
+
+/// Takes a string and try to return a Value(number) for it.
+fn number_from_string(s: &str) -> Result<MathValue, String> {
+    let converted = if s.len() > 3 && &s[0..2] == "0x" {
+        i64::from_str_radix(&s[2..], 16)
+    } else {
+        i64::from_str_radix(&s, 10)
+    };
+    if let Ok(num) = converted {
+        Ok(Value(num))
+    } else {
+        return Err(format!("Unable to format {} into a number", s))
+    }
 }
 
 /* --------------------------------- Testing -------------------------------- */
@@ -264,5 +297,18 @@ fn test_reading_numbers() {
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
     assert_eq!(read_numbers(&mut tokens), Err("Unable to format toto into a number".to_string()));
+}
+
+#[test]
+fn test_read_named_variables() {
+    let variables = HashMap::from([
+        ("direct_1".to_string(), "1".to_string()),
+        ("indirect_3".to_string(), "2".to_string()),
+        ("indirect_2".to_string(), "indirect_3".to_string()),
+        ("indirect_1".to_string(), "indirect_2".to_string()),
+    ]);
+    let mut tokens = vec![Name("3".to_string()), Name("indirect_1".to_string()), Name("direct_1".to_string())];
+    read_named_variables(&mut tokens, Some(variables)).unwrap();
+    assert_eq!(tokens, vec![Name("3".to_string()), Value(2), Value(1)]);
 }
 
