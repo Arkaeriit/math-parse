@@ -222,6 +222,37 @@ fn read_named_variables(line: &mut [MathValue], map: Option<HashMap<String, Stri
     Ok(())
 }
 
+/// Reads a line of math that contains only values, operations, and parenthesis
+/// and returns a computed result.
+fn math_final_compute(line: &[MathValue]) -> i64 {
+
+    fn math_compute_index(line: &[MathValue], index: usize) -> i64 {
+        match line[index] {
+            Value(number) => number,
+            ParenOpen(offset) => {
+                let target: isize = (index as isize) + offset;
+                math_compute_index(line, target.try_into().unwrap())
+            },
+            Operation(op, offset_1, offset_2) => {
+                let target: isize = (index as isize) + offset_1;
+                let value_1 = math_compute_index(line, target.try_into().unwrap());
+                let target: isize = (index as isize) + offset_2;
+                let value_2 = math_compute_index(line, target.try_into().unwrap());
+                match op {
+                    '*' => value_1 * value_2,
+                    '/' => value_1 / value_2,
+                    '+' => value_1 + value_2,
+                    '-' => value_1 - value_2,
+                    x => {panic!("Error, {x} is not a valid operator.");},
+                }
+            },
+            _ => {panic!("lol");},
+        }
+    }
+
+    math_compute_index(line, 0)
+}
+
 /* ---------------------------------- Utils --------------------------------- */
 
 /// Return true if the element is in the slice
@@ -310,5 +341,14 @@ fn test_read_named_variables() {
     let mut tokens = vec![Name("3".to_string()), Name("indirect_1".to_string()), Name("direct_1".to_string())];
     read_named_variables(&mut tokens, Some(variables)).unwrap();
     assert_eq!(tokens, vec![Name("3".to_string()), Value(2), Value(1)]);
+}
+
+#[test]
+fn test_math_final_compute() {
+    let mut tokens = math_token("(3-5)*4");
+    math_parse(&mut tokens).unwrap();
+    read_numbers(&mut tokens).unwrap();
+    let computation = math_final_compute(&tokens);
+    assert_eq!(computation, (3-5)*4);
 }
 
