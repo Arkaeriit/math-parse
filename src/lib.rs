@@ -119,11 +119,11 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
     /// Convert two slices and a symbol into a `MathOp`
     /// Return an user error if needed.
     fn make_op(line: &mut [MathValue], operator_index: usize) -> Result<(), String> {
-        let (part1, mut part2_and_op) = line.split_at_mut(operator_index);
+        let (part1, part2_and_op) = line.split_at_mut(operator_index);
         let operator_offset: isize = operator_index.try_into().unwrap();
         let (op, part2) = part2_and_op.split_at_mut(1);
-        let val1 = math_parse(part1)?;
-        let val2 = math_parse(part2)?;
+        math_parse(part1)?;
+        math_parse(part2)?;
         let op = if let Operator(c) = op[0] {
             c
         } else {
