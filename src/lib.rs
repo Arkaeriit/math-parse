@@ -5,23 +5,14 @@ enum MathValue {
     // Values used in parsing
     Name(String),  // With a bit of work, I could use &str or the like, but as math constants are probably not going to be used very often, performance is not a great concern.
     Operator(char),
-    NoMath,        // Value that have been removed, it should be garbage-collected.
 
     // Values used in solving
-    Value(usize),  // TODO: float?
-    Operation(MathOp),
-    SubExpression(usize),
+    Value(u64),  // TODO: float?
+    Operation(char, isize, isize),
+    ParenOpen(isize), // Value stored is the offset between the parenthesis' index and the index of what is inside
+    ParenClose(usize),
 }
 use MathValue::*;
-
-#[derive(Debug, PartialEq)]
-enum MathOp {
-    Add(usize, usize),
-    Sub(usize, usize),
-    Mul(usize, usize),
-    Div(usize, usize),
-}
-use MathOp::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
 fn math_token(s: &str) -> Vec<MathValue> {
@@ -105,11 +96,14 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
                 } else if let Operator(')') = line[i] {
                     paren_depth -= 1;
                     if paren_depth == 0 { // We finally closed the parenthesis
-                        let mut used_slice = &mut line[paren_open_index+1..i];
-                        math_parse(used_slice);
-                        let replacement = SubExpression(i);
-                        let _ = std::mem::replace(&mut line[paren_open_index], NoMath);
-                        let _ = std::mem::replace(&mut line[i], replacement);
+                        let size_between_paren = i - paren_open_index - 1;
+                        let (before_used, used_slice_and_end) = line.split_at_mut(paren_open_index+1);
+                        let (used_slice, after_used) = used_slice_and_end.split_at_mut(size_between_paren);
+                        math_parse(used_slice)?;
+                        let open  = ParenOpen(1);
+                        let close = ParenClose(size_between_paren);
+                        let _ = std::mem::replace(&mut before_used[paren_open_index], open);
+                        let _ = std::mem::replace(&mut after_used[0], close);
                     }
                 }
             }
@@ -122,31 +116,11 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
         }
     }
 
-    /// Removes all the NoMath eGlements from a slice.
-    /// Returns a slice which only contains useful elements.
-    fn garbage_collect_math(line: &mut [MathValue]) -> &mut [MathValue] {
-        let mut tmp = Vec::<MathValue>::new();
-        for i in 0..line.len() {
-            //let from = &line[line.len() - 1 - i];
-            let from = std::mem::replace(&mut line[line.len() - 1 - i], NoMath);
-            if from != NoMath {
-                tmp.push(from);
-            }
-        }
-        // tmp is reversed so we want to reverse it back
-        println!("tmp={:?}", tmp);
-        let mut last_i = 0;
-        for i in 0..tmp.len() {
-            line[i] = tmp.pop().expect("Should not happen as we do it as much as there is elements in tmp.");
-            last_i = i;
-        }
-        &mut line[0..last_i+1]
-    }
-
     /// Convert two slices and a symbol into a `MathOp`
     /// Return an user error if needed.
     fn make_op(line: &mut [MathValue], operator_index: usize) -> Result<(), String> {
         let (part1, mut part2_and_op) = line.split_at_mut(operator_index);
+        let operator_offset: isize = operator_index.try_into().unwrap();
         let (op, part2) = part2_and_op.split_at_mut(1);
         let val1 = math_parse(part1)?;
         let val2 = math_parse(part2)?;
@@ -155,14 +129,13 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
         } else {
             panic!("Wrong use of make_op!");
         };
-        let operation = match op {
-            '+' => Add(operator_index, operator_index+1),
-            '-' => Sub(operator_index, operator_index+1),
-            '*' => Mul(operator_index, operator_index+1),
-            '/' => Div(operator_index, operator_index+1),
-            _ => {return Err(format!("Error, {} is not a valid math operator.", op))},
+        let operation = Operation(op, operator_offset, operator_offset+1);
+        let part_1_header = std::mem::replace(&mut line[0], operation);
+        let part_1_header = match part_1_header {
+            ParenOpen(inside_offset) => ParenOpen(inside_offset - operator_offset),
+            Operation(c, offset_1, offset_2) => Operation(c, offset_1 - operator_offset, offset_2 - operator_offset),
+            x => x,
         };
-        let part_1_header = std::mem::replace(&mut line[0], Operation(operation));
         let _ = std::mem::replace(&mut line[operator_index], part_1_header);
         Ok(())
     }
@@ -188,7 +161,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
                             }
                             index -= 1;
                         },
-                        SubExpression(size) => {
+                        ParenClose(size) => {
                             index -= size;
                         },
                         _ => {
@@ -204,24 +177,15 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
     println!("Parse {:?}", line);
     paren_parse(line)?;
     println!("after paren {:?}", line);
-    let cleaned = garbage_collect_math(line);
-    println!("cleaned {:?}", cleaned);
 
     //TODO: unary operators
-    parse_op(cleaned, &['+', '-'])?;
-    parse_op(cleaned, &['/', '*'])?;
+    parse_op(line, &['+', '-'])?;
+    parse_op(line, &['/', '*'])?;
 
     Ok(())
 }
 
-
-
 /* ---------------------------------- Utils --------------------------------- */
-
-/// Return true if a string got any chars from the `MATH_CHARS`.
-fn contains_math_chars(s: &str) -> bool {
-    s.contains(MATH_CHARS)
-}
 
 /// Return true if the element is in the slice
 fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
@@ -243,27 +207,30 @@ fn test_math_token() {
 
 #[test]
 fn test_math_parse() {
-    /*
     let math_line = "88+89";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens[0], MV(SubExpression(Box::new(Add(TmpName("88".to_string()), TmpName("89".to_string()))))));
+    assert_eq!(tokens, vec![Operation('+', 1, 2), Name("88".to_string()), Name("89".to_string())]);
+
     let math_line = "1*2+3*4";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens[0], MV(SubExpression(Box::new(Add(
-                    SubExpression(Box::new(Mul(TmpName("1".to_string()), TmpName("2".to_string())))),
-                    SubExpression(Box::new(Mul(TmpName("3".to_string()), TmpName("4".to_string()))))
+    assert_eq!(tokens, vec![Operation('+', 3, 4), Name("1".to_string()), Name("2".to_string()), Operation('*', -2, -1), Operation('*', 1, 2), Name("3".to_string()), Name("4".to_string())]);
 
-                    )))));
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line);
-    let parsed = math_parse(&mut tokens).unwrap();
-    assert_eq!(parsed, MV(SubExpression(Box::new(Mul(
-                    SubExpression(Box::new(Add(TmpName("1".to_string()), TmpName("2".to_string())))),
-                    SubExpression(Box::new(Add(TmpName("3".to_string()), TmpName("4".to_string()))))
-
-                    )))));
-                    */
+    math_parse(&mut tokens).unwrap();
+    assert_eq!(tokens, vec![
+               Operation('*', 5, 6),
+               Operation('+', 1, 2),
+               Name("1".to_string()),
+               Name("2".to_string()),
+               ParenClose(3),
+               ParenOpen(-4),
+               ParenOpen(1),
+               Operation('+', 1, 2),
+               Name("3".to_string()),
+               Name("4".to_string()),
+               ParenClose(3)]);
 }
 
