@@ -7,7 +7,7 @@ enum MathValue {
     Operator(char),
 
     // Values used in solving
-    Value(u64),  // TODO: float?
+    Value(i64),  // TODO: float?
     Operation(char, isize, isize),
     ParenOpen(isize), // Value stored is the offset between the parenthesis' index and the index of what is inside
     ParenClose(usize),
@@ -185,6 +185,24 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
     Ok(())
 }
 
+fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
+    for i in 0..line.len() {
+        if let Name(name) = &line[i] {
+            let converted = if name.len() > 3 && &name[0..2] == "0x" {
+                i64::from_str_radix(&name[2..], 16)
+            } else {
+                i64::from_str_radix(&name, 10)
+            };
+            if let Ok(num) = converted {
+                line[i] = Value(num);
+            } else {
+                return Err(format!("Unable to format {} into a number", name));
+            }
+        }
+    }
+    Ok(())
+}
+
 /* ---------------------------------- Utils --------------------------------- */
 
 /// Return true if the element is in the slice
@@ -232,5 +250,19 @@ fn test_math_parse() {
                Name("3".to_string()),
                Name("4".to_string()),
                ParenClose(3)]);
+}
+
+#[test]
+fn test_reading_numbers() {
+    let math_line = "100*0x10-2";
+    let mut tokens = math_token(math_line);
+    math_parse(&mut tokens).unwrap();
+    read_numbers(&mut tokens).unwrap();
+    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(100), Value(0x10), Operation('*', -2, -1), Value(2)]);
+
+    let math_line = "toto-0x10";
+    let mut tokens = math_token(math_line);
+    math_parse(&mut tokens).unwrap();
+    assert_eq!(read_numbers(&mut tokens), Err("Unable to format toto into a number".to_string()));
 }
 
