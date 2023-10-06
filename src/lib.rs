@@ -71,11 +71,11 @@ fn math_token(s: &str) -> Vec<MathValue> {
 //                               
 //               |               
 //               v               
-//                               
-//   /---v   /---v               
-// | * | ( | + | 2 | 4 | ) | 3 | 
-//   |   |   ·-------^   |   ^   
-//   |   ·---------------/   |   
+//   /-------------------·       
+//   |   /---v           v       
+// | * | + | 2 | 4 | ) | ( | 3 | 
+//   |  ^ ·------^   |   |   |   
+//   |  ·---------------./   |   
 //   ·-----------------------/   
 //                               
 fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
@@ -201,7 +201,7 @@ fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
 /// the map to it's value. Keeps trying with the result and then, try to make
 /// it into a number.
 /// If map is None, nothing is done.
-fn read_named_variables(line: &mut [MathValue], map: Option<HashMap<String, String>>) -> Result<(), String> {
+fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, String>>) -> Result<(), String> {
     let map = if let Some(m) = map {
         m
     } else {
@@ -251,6 +251,14 @@ fn math_final_compute(line: &[MathValue]) -> i64 {
     }
 
     math_compute_index(line, 0)
+}
+
+pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<i64, String> {
+    let mut tokens = math_token(s);
+    math_parse(&mut tokens)?;
+    read_named_variables(&mut tokens, map)?;
+    read_numbers(&mut tokens)?;
+    Ok(math_final_compute(&tokens))
 }
 
 /* ---------------------------------- Utils --------------------------------- */
@@ -339,7 +347,7 @@ fn test_read_named_variables() {
         ("indirect_1".to_string(), "indirect_2".to_string()),
     ]);
     let mut tokens = vec![Name("3".to_string()), Name("indirect_1".to_string()), Name("direct_1".to_string())];
-    read_named_variables(&mut tokens, Some(variables)).unwrap();
+    read_named_variables(&mut tokens, Some(&variables)).unwrap();
     assert_eq!(tokens, vec![Name("3".to_string()), Value(2), Value(1)]);
 }
 
@@ -350,5 +358,23 @@ fn test_math_final_compute() {
     read_numbers(&mut tokens).unwrap();
     let computation = math_final_compute(&tokens);
     assert_eq!(computation, (3-5)*4);
+}
+
+#[test]
+fn test_math_compute() {
+    let a = 3;
+    let b = 9;
+    let variables = HashMap::from([
+        ("a".to_string(), "3".to_string()),
+        ("b".to_string(), "9".to_string()),
+    ]);
+    
+    let compute = |input: &str, output: i64| {
+        let res = math_compute(input, Some(&variables)).unwrap();
+        assert_eq!(res, output);
+    };
+
+    compute("((3+3)*b+8)/(a-1)", ((3+3)*b+8)/(a-1));
+    compute("0", 0);
 }
 
