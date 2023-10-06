@@ -1,4 +1,8 @@
 use std::collections::HashMap;
+use crate::MathParseErrors;
+use crate::MathParseErrors::*;
+
+/* ---------------------------------- Maths --------------------------------- */
 
 const MATH_CHARS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
 
@@ -46,7 +50,6 @@ fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
 
 /// Parse a line of `MathValue` and make it into a tree of operations.
 /// The root of the tree will be kept as the first element of the vector.
-/// If there is an error, return an error message made for the user.
 // Here are some example of rearangements:
 //                               
 // | 0 | + | 1 |                 
@@ -81,10 +84,10 @@ fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
 //   |  ·---------------./   |   
 //   ·-----------------------/   
 //                               
-fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
+fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 
     /// Transform content in parenthesis into a root element.
-    fn paren_parse(line: &mut [MathValue]) -> Result<(), String> {
+    fn paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         let mut paren_open_index = 0;
         let mut paren_depth = 0;
         for i in 0..line.len() {
@@ -93,7 +96,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
                     paren_open_index = i;
                     paren_depth = 1;
                 } else if let Operator(')') = line[i] {
-                    return Err(format!("Error, closing a parenthesis with no matching open ones.\n"));
+                    return Err(UnopenedParenthesis);
                 }
             } else {
                 if let Operator('(') = line[i] {
@@ -115,7 +118,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
         }
 
         if paren_depth != 0 {
-            Err("Error, opening parenthesis with no matching closed one.\n".to_string())
+            Err(UnclosedParenthesis)
         } else {
             Ok(())
         }
@@ -123,16 +126,16 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
 
     /// Convert two slices and a symbol into a `MathOp`
     /// Return an user error if needed.
-    fn make_op(line: &mut [MathValue], operator_index: usize) -> Result<(), String> {
+    fn make_op(line: &mut [MathValue], operator_index: usize) -> Result<(), MathParseErrors> {
         let (part1, part2_and_op) = line.split_at_mut(operator_index);
-        let operator_offset: isize = operator_index.try_into().unwrap();
+        let operator_offset = u_to_i(operator_index)?;
         let (op, part2) = part2_and_op.split_at_mut(1);
         math_parse(part1)?;
         math_parse(part2)?;
         let op = if let Operator(c) = op[0] {
             c
         } else {
-            panic!("Wrong use of make_op!");
+            return Err(MathParseInternalBug(format!("{:?} should not have been used in make_op.", op[0])));
         };
         let operation = Operation(op, operator_offset, operator_offset+1);
         let part_1_header = std::mem::replace(&mut line[0], operation);
@@ -148,10 +151,9 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
     /// Parse a line of math from left to right, if any operator from the list
     /// if found, makes a `MathOp` out of it.
     /// Handles the special cases of 1 or 2 elements in the line.
-    /// Returns None if none of the operators are found.
-    fn parse_op(line: &mut [MathValue], ops: &[char]) -> Result<(), String> {
+    fn parse_op(line: &mut [MathValue], ops: &[char]) -> Result<(), MathParseErrors> {
         match line.len() {
-            0 => Err(format!("Error, empty line of math.\n")),
+            0 => Err(EmptyLine),
             1 => Ok(()),
             _ => {
                 let mut index = line.len() - 2;
@@ -191,7 +193,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
 }
 
 /// Take a line of MathValue and replace each value found with a number.
-fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
+fn read_numbers(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     for i in 0..line.len() {
         if let Name(name) = &line[i] {
             line[i] = Value(number_from_string(name)?);
@@ -204,7 +206,7 @@ fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
 /// the map to it's value. Keeps trying with the result and then, try to make
 /// it into a number.
 /// If map is None, nothing is done.
-fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, String>>) -> Result<(), String> {
+fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
     let map = if let Some(m) = map {
         m
     } else {
@@ -227,41 +229,41 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
 
 /// Reads a line of math that contains only values, operations, and parenthesis
 /// and returns a computed result.
-fn math_final_compute(line: &[MathValue]) -> i64 {
+fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
 
-    fn math_compute_index(line: &[MathValue], index: usize) -> i64 {
-        match line[index] {
-            Value(number) => number,
+    fn math_compute_index(line: &[MathValue], index: usize) -> Result<i64, MathParseErrors> {
+        match &line[index] {
+            Value(number) => Ok(*number),
             ParenOpen(offset) => {
-                let target: isize = (index as isize) + offset;
-                math_compute_index(line, target.try_into().unwrap())
+                let target = add_index_offset(index, *offset)?;
+                Ok(math_compute_index(line, target)?)
             },
             Operation(op, offset_1, offset_2) => {
-                let target: isize = (index as isize) + offset_1;
-                let value_1 = math_compute_index(line, target.try_into().unwrap());
-                let target: isize = (index as isize) + offset_2;
-                let value_2 = math_compute_index(line, target.try_into().unwrap());
+                let target = add_index_offset(index, *offset_1)?;
+                let value_1 = math_compute_index(line, target)?;
+                let target = add_index_offset(index, *offset_2)?;
+                let value_2 = math_compute_index(line, target)?;
                 match op {
-                    '*' => value_1 * value_2,
-                    '/' => value_1 / value_2,
-                    '+' => value_1 + value_2,
-                    '-' => value_1 - value_2,
-                    x => {panic!("Error, {x} is not a valid operator.");},
+                    '*' => Ok(value_1 * value_2),
+                    '/' => Ok(value_1 / value_2),
+                    '+' => Ok(value_1 + value_2),
+                    '-' => Ok(value_1 - value_2),
+                    x => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
-            _ => {panic!("lol");},
+            x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
         }
     }
 
     math_compute_index(line, 0)
 }
 
-pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<i64, String> {
+pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
     let mut tokens = math_token(s);
     math_parse(&mut tokens)?;
     read_named_variables(&mut tokens, map)?;
     read_numbers(&mut tokens)?;
-    Ok(math_final_compute(&tokens))
+    Ok(math_final_compute(&tokens)?)
 }
 
 /* ---------------------------------- Utils --------------------------------- */
@@ -277,7 +279,7 @@ fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
 }
 
 /// Takes a string and try to return a number for it.
-fn number_from_string(s: &str) -> Result<i64, String> {
+fn number_from_string(s: &str) -> Result<i64, MathParseErrors> {
     let converted = if s.len() > 3 && &s[0..2] == "0x" {
         i64::from_str_radix(&s[2..], 16)
     } else {
@@ -286,8 +288,32 @@ fn number_from_string(s: &str) -> Result<i64, String> {
     if let Ok(num) = converted {
         Ok(num)
     } else {
-        return Err(format!("Unable to format {} into a number", s))
+        Err(InvalidNumber(s.to_string()))
     }
+}
+
+/// Takes a isize that should be positive and makes it a usize
+fn i_to_u(i: isize) -> Result<usize, MathParseErrors> {
+    if let Ok(u) = TryInto::<usize>::try_into(i) {
+        Ok(u)
+    } else {
+        Err(MathParseInternalBug(format!("{i} should have been positive.")))
+    }
+}
+
+/// Takes a usize and try to make it into a isize
+fn u_to_i(u: usize) -> Result<isize, MathParseErrors> {
+    if let Ok(i) = TryInto::<isize>::try_into(u) {
+        Ok(i)
+    } else {
+        return Err(MathParseInternalBug(format!("{u} should be made as isize.")));
+    }
+}
+
+/// Takes an index and an offset and return the resulting index
+fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseErrors> {
+    let index_i = u_to_i(index)?;
+    i_to_u(index_i + offset)
 }
 
 /* --------------------------------- Testing -------------------------------- */
@@ -325,6 +351,10 @@ fn test_math_parse() {
                Name("3"),
                Name("4"),
                ParenClose(3)]);
+
+    assert_eq!(math_parse(&mut math_token("33)")), Err(UnopenedParenthesis));
+    assert_eq!(math_parse(&mut math_token("((33)")), Err(UnclosedParenthesis));
+    assert_eq!(math_parse(&mut math_token("")), Err(EmptyLine));
 }
 
 #[test]
@@ -338,7 +368,7 @@ fn test_reading_numbers() {
     let math_line = "toto-0x10";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(read_numbers(&mut tokens), Err("Unable to format toto into a number".to_string()));
+    assert_eq!(read_numbers(&mut tokens), Err(InvalidNumber("toto".to_string())));
 }
 
 #[test]
@@ -359,7 +389,7 @@ fn test_math_final_compute() {
     let mut tokens = math_token("(3-5)*4");
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
-    let computation = math_final_compute(&tokens);
+    let computation = math_final_compute(&tokens).unwrap();
     assert_eq!(computation, (3-5)*4);
 }
 
