@@ -215,10 +215,9 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
         if let Name(name) = &line[i] {
             if let Some(mut new_name) = map.get(&name.to_string()) {
                 while let Some(newer_name) = map.get(new_name) {
-                    // TODO: check for math char
                     new_name = newer_name;
                 }
-                let num: i64 = number_from_string(&new_name)?;
+                let num: i64 = math_compute(&new_name, Some(map))?;
                 let _ = std::mem::replace(&mut line[i], Value(num));
             }
         }
@@ -368,9 +367,11 @@ fn test_math_final_compute() {
 fn test_math_compute() {
     let a = 3;
     let b = 9;
+    let c = 3*5;
     let variables = HashMap::from([
         ("a".to_string(), "3".to_string()),
         ("b".to_string(), "9".to_string()),
+        ("c".to_string(), "(((3)*(5)))".to_string()),
     ]);
     
     let compute = |input: &str, output: i64| {
@@ -380,5 +381,6 @@ fn test_math_compute() {
 
     compute("((3+3)*b+8)/(a-1)", ((3+3)*b+8)/(a-1));
     compute("0", 0);
+    compute("a+b-c", a+b-c);
 }
 
