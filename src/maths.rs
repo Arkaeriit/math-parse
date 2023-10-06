@@ -3,9 +3,9 @@ use std::collections::HashMap;
 const MATH_CHARS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
 
 #[derive(Debug, PartialEq)]
-enum MathValue {
+enum MathValue<'a> {
     // Values used in parsing
-    Name(String),  // With a bit of work, I could use &str or the like, but as math constants are probably not going to be used very often, performance is not a great concern.
+    Name(&'a str), 
     Operator(char),
 
     // Values used in solving
@@ -17,24 +17,27 @@ enum MathValue {
 use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
-fn math_token(s: &str) -> Vec<MathValue> {
+fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
     let mut ret = Vec::<MathValue>::new();
-    let mut new_name = String::new(); // Word that we are writing
+    let mut new_name_index = !0; // Word that we are writing, !0 indicate we were not writing anything.
+    let mut current_index = 0;
 
     for c in s.chars() {
+        println!("c = {}, ci = {}, nni = {}", c, current_index, new_name_index);
         if is_in(c, &MATH_CHARS) {
-            if new_name.as_str() != "" { // We were writing a work
-                ret.push(Name(new_name.clone()));
-                new_name.clear();
+            if new_name_index != !0 { // We were writing a work
+                ret.push(Name(&s[new_name_index..current_index]));
+                new_name_index = !0;
             }
             ret.push(Operator(c));
-        } else {
-            new_name.push(c);
+        } else if new_name_index == !0 {
+            new_name_index = current_index;
         }
+        current_index += 1;
     }
 
-    if new_name.as_str() != "" { // We were writing a work
-        ret.push(Name(new_name.clone()));
+    if new_name_index != !0 { // We were writing a work
+        ret.push(Name(&s[new_name_index..]));
     }
     ret
 }
@@ -191,7 +194,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), String> {
 fn read_numbers(line: &mut [MathValue]) -> Result<(), String> {
     for i in 0..line.len() {
         if let Name(name) = &line[i] {
-            line[i] = number_from_string(name)?
+            line[i] = Value(number_from_string(name)?);
         }
     }
     Ok(())
@@ -210,12 +213,13 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
 
     for i in 0..line.len() {
         if let Name(name) = &line[i] {
-            if let Some(mut new_name) = map.get(name) {
+            if let Some(mut new_name) = map.get(&name.to_string()) {
                 while let Some(newer_name) = map.get(new_name) {
                     // TODO: check for math char
                     new_name = newer_name;
                 }
-                line[i] = number_from_string(&new_name)?;
+                let num: i64 = number_from_string(&new_name)?;
+                let _ = std::mem::replace(&mut line[i], Value(num));
             }
         }
     }
@@ -273,15 +277,15 @@ fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
     false
 }
 
-/// Takes a string and try to return a Value(number) for it.
-fn number_from_string(s: &str) -> Result<MathValue, String> {
+/// Takes a string and try to return a number for it.
+fn number_from_string(s: &str) -> Result<i64, String> {
     let converted = if s.len() > 3 && &s[0..2] == "0x" {
         i64::from_str_radix(&s[2..], 16)
     } else {
         i64::from_str_radix(&s, 10)
     };
     if let Ok(num) = converted {
-        Ok(Value(num))
+        Ok(num)
     } else {
         return Err(format!("Unable to format {} into a number", s))
     }
@@ -292,7 +296,7 @@ fn number_from_string(s: &str) -> Result<MathValue, String> {
 #[test]
 fn test_math_token() {
     let math_line = "+4/88*toto";
-    assert_eq!(math_token(math_line), vec![Operator('+'), Name("4".to_string()), Operator('/'), Name("88".to_string()), Operator('*'), Name("toto".to_string())]);
+    assert_eq!(math_token(math_line), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto")]);
 }
 
 #[test]
@@ -300,12 +304,12 @@ fn test_math_parse() {
     let math_line = "88+89";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 1, 2), Name("88".to_string()), Name("89".to_string())]);
+    assert_eq!(tokens, vec![Operation('+', 1, 2), Name("88"), Name("89")]);
 
     let math_line = "1*2+3*4";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 3, 4), Name("1".to_string()), Name("2".to_string()), Operation('*', -2, -1), Operation('*', 1, 2), Name("3".to_string()), Name("4".to_string())]);
+    assert_eq!(tokens, vec![Operation('+', 3, 4), Name("1"), Name("2"), Operation('*', -2, -1), Operation('*', 1, 2), Name("3"), Name("4")]);
 
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line);
@@ -313,14 +317,14 @@ fn test_math_parse() {
     assert_eq!(tokens, vec![
                Operation('*', 5, 6),
                Operation('+', 1, 2),
-               Name("1".to_string()),
-               Name("2".to_string()),
+               Name("1"),
+               Name("2"),
                ParenClose(3),
                ParenOpen(-4),
                ParenOpen(1),
                Operation('+', 1, 2),
-               Name("3".to_string()),
-               Name("4".to_string()),
+               Name("3"),
+               Name("4"),
                ParenClose(3)]);
 }
 
@@ -346,9 +350,9 @@ fn test_read_named_variables() {
         ("indirect_2".to_string(), "indirect_3".to_string()),
         ("indirect_1".to_string(), "indirect_2".to_string()),
     ]);
-    let mut tokens = vec![Name("3".to_string()), Name("indirect_1".to_string()), Name("direct_1".to_string())];
+    let mut tokens = vec![Name("3"), Name("indirect_1"), Name("direct_1")];
     read_named_variables(&mut tokens, Some(&variables)).unwrap();
-    assert_eq!(tokens, vec![Name("3".to_string()), Value(2), Value(1)]);
+    assert_eq!(tokens, vec![Name("3"), Value(2), Value(1)]);
 }
 
 #[test]
