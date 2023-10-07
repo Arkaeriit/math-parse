@@ -27,6 +27,9 @@ pub enum MathParseErrors {
     /// An expression that should have been a number but can't be read.
     InvalidNumber(String),
 
+    /// An operator is not where it should be. Like a "*" after a "+".
+    MisplacedOperator(char),
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),

@@ -114,7 +114,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
                 },
                 Operator(x) => {
                     if previous_operator {
-                        panic!("TODO: proper error for this");
+                        return Err(MisplacedOperator(*x));
                     }
                     previous_operator = true;
                 },
@@ -302,6 +302,15 @@ fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
                     x => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
+            UnaryOperation(op, offset) => {
+                let target = add_index_offset(index, *offset)?;
+                let value = math_compute_index(line, target)?;
+                match op {
+                    '+' => Ok(value),
+                    '-' => Ok(-1 * value),
+                    x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
+                }
+            },
             x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
         }
     }
@@ -406,6 +415,7 @@ fn test_math_parse() {
     assert_eq!(math_parse(&mut math_token("33)")), Err(UnopenedParenthesis));
     assert_eq!(math_parse(&mut math_token("((33)")), Err(UnclosedParenthesis));
     assert_eq!(math_parse(&mut math_token("")), Err(EmptyLine));
+    assert_eq!(math_parse(&mut math_token("33+*23")), Err(MisplacedOperator('*')));
 }
 
 #[test]
@@ -462,6 +472,7 @@ fn test_math_compute() {
 
     compute("((3+3)*b+8)/(a-1)", ((3+3)*b+8)/(a-1));
     compute("0", 0);
-    compute("a+b-c", a+b-c);
+    compute("-a+b-c", -a+b-c);
+    compute("---+++-a", ----a);
 }
 
