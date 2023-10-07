@@ -8,6 +8,8 @@ const MATH_CHARS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
+    TrailingError, // Placed at the last element of a line, used as a canary to catch misbehaving unary operators
+
     // Values used in parsing
     Name(&'a str), 
     Operator(char),
@@ -44,6 +46,7 @@ fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
     if new_name_index != !0 { // We were writing a work
         ret.push(Name(&s[new_name_index..]));
     }
+    ret.push(TrailingError);
     ret
 }
 
@@ -121,6 +124,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
                 Name(_) => {
                     previous_operator = false;
                 },
+                TrailingError => {},
                 x => {
                     return Err(MathParseInternalBug(format!("{x:?} should not have been present in unary_parse.")));
                 },
@@ -198,7 +202,10 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     fn parse_op(line: &mut [MathValue], ops: &[char]) -> Result<(), MathParseErrors> {
         match line.len() {
             0 => Err(EmptyLine),
-            1 => Ok(()),
+            1 => match line[0] {
+                TrailingError => Err(EmptyLine),
+                _ => Ok(()),
+            },
             _ => {
                 let mut index = line.len() - 2;
                 while index >= 1 {
@@ -311,6 +318,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
                     x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
                 }
             },
+            TrailingError => Err(TrailingOperator),
             x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
         }
     }
@@ -381,7 +389,7 @@ fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseError
 #[test]
 fn test_math_token() {
     let math_line = "+4/88*toto";
-    assert_eq!(math_token(math_line), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto")]);
+    assert_eq!(math_token(math_line), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto"), TrailingError]);
 }
 
 #[test]
@@ -389,12 +397,12 @@ fn test_math_parse() {
     let math_line = "+88+89";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89")]);
+    assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89"), TrailingError]);
 
     let math_line = "-1*2+-3*4";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4")]);
+    assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4"), TrailingError]);
 
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line);
@@ -410,12 +418,16 @@ fn test_math_parse() {
                Operation('+', 1, 2),
                Name("3"),
                Name("4"),
-               ParenClose(3)]);
+               ParenClose(3),
+               TrailingError]);
 
     assert_eq!(math_parse(&mut math_token("33)")), Err(UnopenedParenthesis));
     assert_eq!(math_parse(&mut math_token("((33)")), Err(UnclosedParenthesis));
     assert_eq!(math_parse(&mut math_token("")), Err(EmptyLine));
+    assert_eq!(math_parse(&mut math_token("22+()")), Err(EmptyLine));
     assert_eq!(math_parse(&mut math_token("33+*23")), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse(&mut math_token("*2")), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse(&mut math_token("2/")), Err(EmptyLine));
 }
 
 #[test]
@@ -424,7 +436,7 @@ fn test_reading_numbers() {
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(100), Value(0x10), Operation('*', -2, -1), Value(2)]);
+    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(100), Value(0x10), Operation('*', -2, -1), Value(2), TrailingError]);
 
     let math_line = "toto-0x10";
     let mut tokens = math_token(math_line);
@@ -452,6 +464,12 @@ fn test_math_final_compute() {
     read_numbers(&mut tokens).unwrap();
     let computation = math_final_compute(&tokens).unwrap();
     assert_eq!(computation, (3-5)*4);
+
+    let mut tokens = math_token("3++");
+    math_parse(&mut tokens).unwrap();
+    read_numbers(&mut tokens).unwrap();
+    let computation = math_final_compute(&tokens);
+    assert_eq!(computation, Err(TrailingOperator));
 }
 
 #[test]

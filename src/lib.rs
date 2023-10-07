@@ -27,8 +27,13 @@ pub enum MathParseErrors {
     /// An expression that should have been a number but can't be read.
     InvalidNumber(String),
 
-    /// An operator is not where it should be. Like a "*" after a "+".
+    /// An operator is not where it should be. Like a "*" after a "+", or the
+    /// left hand side of an operator being empty.
     MisplacedOperator(char),
+
+    /// An operator is the last element of a line of math. Or the right hand
+    /// side of an operator is empty.
+    TrailingOperator,
 
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
