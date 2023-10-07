@@ -15,6 +15,7 @@ enum MathValue<'a> {
     // Values used in solving
     Value(i64),  // TODO: float?
     Operation(char, isize, isize),
+    UnaryOperation(char, isize),
     ParenOpen(isize), // Value stored is the offset between the parenthesis' index and the index of what is inside
     ParenClose(usize),
 }
@@ -86,6 +87,48 @@ fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
 //                               
 fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 
+    /// Parse unary operators this must be done before any other steps of the
+    /// parsing as the next steps will move around the elements used to
+    /// determine which operators are unary.
+    fn unary_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
+        let mut previous_operator = true;
+        for i in 0..line.len() {
+            match &line[i] {
+                Operator('+') => {
+                    if previous_operator {
+                        let _ = std::mem::replace(&mut line[i], UnaryOperation('+', 1));
+                    }
+                    previous_operator = true;
+                },
+                Operator('-') => {
+                    if previous_operator {
+                        let _ = std::mem::replace(&mut line[i], UnaryOperation('-', 1));
+                    }
+                    previous_operator = true;
+                },
+                Operator('(') => {
+                    previous_operator = true;
+                },
+                Operator(')') => {
+                    previous_operator = false;
+                },
+                Operator(x) => {
+                    if previous_operator {
+                        panic!("TODO: proper error for this");
+                    }
+                    previous_operator = true;
+                },
+                Name(_) => {
+                    previous_operator = false;
+                },
+                x => {
+                    return Err(MathParseInternalBug(format!("{x:?} should not have been present in unary_parse.")));
+                },
+            }
+        }
+        Ok(())
+    }
+
     /// Transform content in parenthesis into a root element.
     fn paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         let mut paren_open_index = 0;
@@ -130,8 +173,8 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         let (part1, part2_and_op) = line.split_at_mut(operator_index);
         let operator_offset = u_to_i(operator_index)?;
         let (op, part2) = part2_and_op.split_at_mut(1);
-        math_parse(part1)?;
-        math_parse(part2)?;
+        all_but_paren_parse(part1)?;
+        all_but_paren_parse(part2)?;
         let op = if let Operator(c) = op[0] {
             c
         } else {
@@ -142,6 +185,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         let part_1_header = match part_1_header {
             ParenOpen(inside_offset) => ParenOpen(inside_offset - operator_offset),
             Operation(c, offset_1, offset_2) => Operation(c, offset_1 - operator_offset, offset_2 - operator_offset),
+            UnaryOperation(c, offset) => UnaryOperation(c, offset - operator_offset),
             x => x,
         };
         let _ = std::mem::replace(&mut line[operator_index], part_1_header);
@@ -181,13 +225,20 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         }
     }
 
+    /// Parse everything except for parenthesis, which are already parsed
+    /// recursively, and unary, which are parsed in a single pass.
+    fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
+        parse_op(line, &['+', '-'])?;
+        parse_op(line, &['/', '*'])?;
+        Ok(())
+    }
+
     println!("Parse {:?}", line);
+    unary_parse(line)?;
     paren_parse(line)?;
     println!("after paren {:?}", line);
+    all_but_paren_parse(line)?;
 
-    //TODO: unary operators
-    parse_op(line, &['+', '-'])?;
-    parse_op(line, &['/', '*'])?;
 
     Ok(())
 }
@@ -326,15 +377,15 @@ fn test_math_token() {
 
 #[test]
 fn test_math_parse() {
-    let math_line = "88+89";
+    let math_line = "+88+89";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 1, 2), Name("88"), Name("89")]);
+    assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89")]);
 
-    let math_line = "1*2+3*4";
+    let math_line = "-1*2+-3*4";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 3, 4), Name("1"), Name("2"), Operation('*', -2, -1), Operation('*', 1, 2), Name("3"), Name("4")]);
+    assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4")]);
 
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line);
