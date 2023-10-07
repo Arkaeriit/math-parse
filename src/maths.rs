@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
+const MATH_CHARS: [char; 7] = ['+', '-', '*', '/', '(', ')', '%'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -236,7 +236,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     /// recursively, and unary, which are parsed in a single pass.
     fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         parse_op(line, &['+', '-'])?;
-        parse_op(line, &['/', '*'])?;
+        parse_op(line, &['/', '*', '%'])?;
         Ok(())
     }
 
@@ -306,6 +306,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     '/' => Ok(value_1 / value_2),
                     '+' => Ok(value_1 + value_2),
                     '-' => Ok(value_1 - value_2),
+                    '%' => Ok(value_1 % value_2),
                     x => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
@@ -397,6 +398,19 @@ impl Div for Number {
     }
 }
 
+impl Rem for Number {
+    type Output = Self;
+    
+    fn rem(self, other: Self) -> Self {
+        match (self, other) {
+            (Int(s),   Int(o))   => Int(s % o),
+            (Float(s), Int(o))   => Float(s % i_to_f(o)),
+            (Int(s),   Float(o)) => Float(i_to_f(s) % o),
+            (Float(s), Float(o)) => Float(s % o),
+        }
+    }
+}
+
 /* ---------------------------------- Utils --------------------------------- */
 
 /// Return true if the element is in the slice
@@ -452,14 +466,27 @@ fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseError
 }
 
 /// Convert a float to an integer
-fn f_to_i(f: f64) -> i64 {
-    f.round() as i64
+fn f_to_i(f: f64) -> Result<i64, MathParseErrors> {
+    const INTEGRAL_LIMIT: f64 = 9007199254740992.0;
+    if f.is_nan() {
+        return Err(IntConversion(f));
+    }
+    let f = f.round();
+
+    if f > INTEGRAL_LIMIT {
+        Err(IntConversion(f))
+    } else if f < -1.0 * INTEGRAL_LIMIT {
+        Err(IntConversion(f))
+    } else {
+        Ok(f as i64)
+    }
 }
 
 /// Convert an integer to a float
 fn i_to_f(i: i64) -> f64 {
     i as f64
 }
+
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]
@@ -585,6 +612,7 @@ fn test_math_compute() {
     compute_int("0", 0);
     compute_int("-a+b-c", -a+b-c);
     compute_int("---+++-a", ----a);
+    compute_int("3%8+99", 3%8+99);
 
     compute_float("4*9/4", 4.0*9.0/4.0);
     compute_float("4*9/4.0", 4.0*9.0/4.0);

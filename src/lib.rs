@@ -39,6 +39,9 @@ pub enum MathParseErrors {
     /// side of an operator is empty.
     TrailingOperator,
 
+    /// A float could not be converted to an int.
+    IntConversion(f64),
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),
