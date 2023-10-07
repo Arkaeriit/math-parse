@@ -15,7 +15,7 @@ enum MathValue<'a> {
     Operator(char),
 
     // Values used in solving
-    Value(i64),  // TODO: float?
+    Value(Number),
     Operation(char, isize, isize),
     UnaryOperation(char, isize),
     ParenOpen(isize), // Value stored is the offset between the parenthesis' index and the index of what is inside
@@ -277,7 +277,7 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
                 while let Some(newer_name) = map.get(new_name) {
                     new_name = newer_name;
                 }
-                let num: i64 = math_compute(&new_name, Some(map))?;
+                let num = math_compute(&new_name, Some(map))?;
                 let _ = std::mem::replace(&mut line[i], Value(num));
             }
         }
@@ -287,9 +287,9 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
 
 /// Reads a line of math that contains only values, operations, and parenthesis
 /// and returns a computed result.
-fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
+fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
 
-    fn math_compute_index(line: &[MathValue], index: usize) -> Result<i64, MathParseErrors> {
+    fn math_compute_index(line: &[MathValue], index: usize) -> Result<Number, MathParseErrors> {
         match &line[index] {
             Value(number) => Ok(*number),
             ParenOpen(offset) => {
@@ -314,7 +314,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
                 let value = math_compute_index(line, target)?;
                 match op {
                     '+' => Ok(value),
-                    '-' => Ok(-1 * value),
+                    '-' => Ok(Int(-1) * value),
                     x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
                 }
             },
@@ -326,12 +326,75 @@ fn math_final_compute(line: &[MathValue]) -> Result<i64, MathParseErrors> {
     math_compute_index(line, 0)
 }
 
-pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
+pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
     let mut tokens = math_token(s);
     math_parse(&mut tokens)?;
     read_named_variables(&mut tokens, map)?;
     read_numbers(&mut tokens)?;
     Ok(math_final_compute(&tokens)?)
+}
+
+/* --------------------------------- Numbers -------------------------------- */
+
+use std::ops::*;
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Number {
+    Int(i64),
+    Float(f64),
+}
+use Number::*;
+
+impl Add for Number {
+    type Output = Self;
+    
+    fn add(self, other: Self) -> Self {
+        match (self, other) {
+            (Int(s),   Int(o))   => Int(s + o),
+            (Float(s), Int(o))   => Float(s + i_to_f(o)),
+            (Int(s),   Float(o)) => Float(i_to_f(s) + o),
+            (Float(s), Float(o)) => Float(s + o),
+        }
+    }
+}
+
+impl Sub for Number {
+    type Output = Self;
+    
+    fn sub(self, other: Self) -> Self {
+        match (self, other) {
+            (Int(s),   Int(o))   => Int(s - o),
+            (Float(s), Int(o))   => Float(s - i_to_f(o)),
+            (Int(s),   Float(o)) => Float(i_to_f(s) - o),
+            (Float(s), Float(o)) => Float(s - o),
+        }
+    }
+}
+
+impl Mul for Number {
+    type Output = Self;
+    
+    fn mul(self, other: Self) -> Self {
+        match (self, other) {
+            (Int(s),   Int(o))   => Int(s * o),
+            (Float(s), Int(o))   => Float(s * i_to_f(o)),
+            (Int(s),   Float(o)) => Float(i_to_f(s) * o),
+            (Float(s), Float(o)) => Float(s * o),
+        }
+    }
+}
+
+impl Div for Number {
+    type Output = Self;
+    
+    fn div(self, other: Self) -> Self {
+        match (self, other) {
+            (Int(s),   Int(o))   => Float(i_to_f(s) / i_to_f(o)),
+            (Float(s), Int(o))   => Float(s / i_to_f(o)),
+            (Int(s),   Float(o)) => Float(i_to_f(s) / o),
+            (Float(s), Float(o)) => Float(s / o),
+        }
+    }
 }
 
 /* ---------------------------------- Utils --------------------------------- */
@@ -347,16 +410,20 @@ fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
 }
 
 /// Takes a string and try to return a number for it.
-fn number_from_string(s: &str) -> Result<i64, MathParseErrors> {
+fn number_from_string(s: &str) -> Result<Number, MathParseErrors> {
     let converted = if s.len() > 3 && &s[0..2] == "0x" {
         i64::from_str_radix(&s[2..], 16)
     } else {
         i64::from_str_radix(&s, 10)
     };
     if let Ok(num) = converted {
-        Ok(num)
+        Ok(Int(num))
     } else {
-        Err(InvalidNumber(s.to_string()))
+        if let Ok(num) = s.parse::<f64>() {
+            Ok(Float(num))
+        } else {
+            Err(InvalidNumber(s.to_string()))
+        }
     }
 }
 
@@ -384,6 +451,15 @@ fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseError
     i_to_u(index_i + offset)
 }
 
+/// Convert a float to an integer
+fn f_to_i(f: f64) -> i64 {
+    f.round() as i64
+}
+
+/// Convert an integer to a float
+fn i_to_f(i: i64) -> f64 {
+    i as f64
+}
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]
@@ -432,11 +508,11 @@ fn test_math_parse() {
 
 #[test]
 fn test_reading_numbers() {
-    let math_line = "100*0x10-2";
+    let math_line = "100*0x10-2.5";
     let mut tokens = math_token(math_line);
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(100), Value(0x10), Operation('*', -2, -1), Value(2), TrailingError]);
+    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(Int(100)), Value(Int(0x10)), Operation('*', -2, -1), Value(Float(2.5)), TrailingError]);
 
     let math_line = "toto-0x10";
     let mut tokens = math_token(math_line);
@@ -447,14 +523,14 @@ fn test_reading_numbers() {
 #[test]
 fn test_read_named_variables() {
     let variables = HashMap::from([
-        ("direct_1".to_string(), "1".to_string()),
+        ("direct_1".to_string(), "1.0".to_string()),
         ("indirect_3".to_string(), "2".to_string()),
         ("indirect_2".to_string(), "indirect_3".to_string()),
         ("indirect_1".to_string(), "indirect_2".to_string()),
     ]);
     let mut tokens = vec![Name("3"), Name("indirect_1"), Name("direct_1")];
     read_named_variables(&mut tokens, Some(&variables)).unwrap();
-    assert_eq!(tokens, vec![Name("3"), Value(2), Value(1)]);
+    assert_eq!(tokens, vec![Name("3"), Value(Int(2)), Value(Float(1.0))]);
 }
 
 #[test]
@@ -463,7 +539,11 @@ fn test_math_final_compute() {
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
     let computation = math_final_compute(&tokens).unwrap();
-    assert_eq!(computation, (3-5)*4);
+    if let Int(computation) = computation {
+        assert_eq!(computation, (3-5)*4);
+    } else {
+        panic!("Expected int.");
+    }
 
     let mut tokens = math_token("3++");
     math_parse(&mut tokens).unwrap();
@@ -483,14 +563,41 @@ fn test_math_compute() {
         ("c".to_string(), "(((3)*(5)))".to_string()),
     ]);
     
-    let compute = |input: &str, output: i64| {
+    let compute_int = |input: &str, output: i64| {
         let res = math_compute(input, Some(&variables)).unwrap();
-        assert_eq!(res, output);
+        if let Int(res) = res {
+            assert_eq!(res, output);
+        } else {
+            panic!("Expected integer instead of float.");
+        }
     };
 
-    compute("((3+3)*b+8)/(a-1)", ((3+3)*b+8)/(a-1));
-    compute("0", 0);
-    compute("-a+b-c", -a+b-c);
-    compute("---+++-a", ----a);
+    fn compute_float (input: &str, output: f64) {
+        let res = math_compute(input, None).unwrap();
+        if let Float(res) = res {
+            assert_eq!(res, output);
+        } else {
+            panic!("Expected float instead of integer.");
+        }
+    }
+    
+    compute_int("((3+3)*b+8)*(a-1)", ((3+3)*b+8)*(a-1));
+    compute_int("0", 0);
+    compute_int("-a+b-c", -a+b-c);
+    compute_int("---+++-a", ----a);
+
+    compute_float("4*9/4", 4.0*9.0/4.0);
+    compute_float("4*9/4.0", 4.0*9.0/4.0);
+    compute_float("4.0*9/4", 4.0*9.0/4.0);
+    compute_float("4.0*9.0/4", 4.0*9.0/4.0);
+    compute_float("4*9.0/4", 4.0*9.0/4.0);
+    compute_float("4*9.0/4.0", 4.0*9.0/4.0);
+    compute_float("4.0+9-4", 4.0+9.0-4.0);
+    compute_float("4+9-4.0", 4.0+9.0-4.0);
+    compute_float("4.0+9-4", 4.0+9.0-4.0);
+    compute_float("4.0+9.0-4", 4.0+9.0-4.0);
+    compute_float("4+9.0-4", 4.0+9.0-4.0);
+    compute_float("4+9.0-4.0", 4.0+9.0-4.0);
+
 }
 

@@ -6,7 +6,11 @@ use std::collections::HashMap;
 /// Parse the expression given and apply the optional map of variable that maps
 /// variables to math expressions.
 pub fn math_parse(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
-    maths::math_compute(expression, variable_map)
+    if let maths::Number::Int(ret) = maths::math_compute(expression, variable_map)? {
+        Ok(ret)
+    } else {
+        todo!("Error for floats.");
+    }
 }
 
 /* --------------------------------- Errors --------------------------------- */
