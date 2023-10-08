@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 13] = ['+', '-', '−', '*', '×', '·', '/', '(', ')', '%', '⟌', '!', '~'];
+const MATH_CHARS: [char; 16] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -316,7 +316,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     /// recursively, and unary, which are parsed in a single pass.
     fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         parse_op(line, &['+', '-', '−'])?;
-        parse_op(line, &['/', '*', '×', '·', '%', '⟌'])?;
+        parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'])?;
         Ok(())
     }
 
@@ -382,13 +382,13 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                 let target = add_index_offset(index, *offset_2)?;
                 let value_2 = math_compute_index(line, target)?;
                 match op {
-                    '*' | '×' | '·' => Ok(value_1 * value_2),
-                    '/'             => Ok(value_1 / value_2),
-                    '+'             => Ok(value_1 + value_2),
-                    '-' | '−'       => Ok(value_1 - value_2),
-                    '%'             => Ok(value_1 % value_2),
-                    '⟌'             => Ok(value_1.integer_div(value_2)?),
-                    x               => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
+                    '*' | '×' | '·'       => Ok(value_1 * value_2),
+                    '/' | '∕' | '⁄' | '÷' => Ok(value_1 / value_2),
+                    '+'                   => Ok(value_1 + value_2),
+                    '-' | '−'             => Ok(value_1 - value_2),
+                    '%'                   => Ok(value_1 % value_2),
+                    '⟌'                   => Ok(value_1.integer_div(value_2)?),
+                    x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
             UnaryOperation(op, offset) => {
