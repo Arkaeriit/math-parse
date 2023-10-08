@@ -25,7 +25,7 @@ enum MathValue<'a> {
 use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
-fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
+fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
 
     /// Reads name and operators in a line of math.
     fn token_base<'a>(s: &'a str) -> Vec<MathValue<'a>> {
@@ -80,24 +80,32 @@ fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
 
     /// Removes all the NoMath elements from a slice.
     /// Returns a slice which only contains useful elements.
-    fn token_garbage_collect(line: &mut Vec<MathValue>) {
+    fn token_garbage_collect(line: &mut Vec<MathValue>) -> Result<(), MathParseErrors> {
         let mut tmp = Vec::<MathValue>::new();
         for _ in 0..line.len() {
-            let from = line.pop().expect("Should not happen as we do it as much as there is elements in tmp.");
-            if from != NoMath {
-                tmp.push(from);
+            if let Some(from) = line.pop() {
+                if from != NoMath {
+                    tmp.push(from);
+                }
+            } else {
+                return Err(MathParseInternalBug("Should not happen as we do it as much as there is elements in line.".to_string()));
             }
         }
         // tmp is reversed so we want to reverse it back
         for _ in 0..tmp.len() {
-            line.push(tmp.pop().expect("Should not happen as we do it as much as there is elements in tmp."));
+            if let Some(to) = tmp.pop() {
+                line.push(to);
+            } else {
+                return Err(MathParseInternalBug("Should not happen as we do it as much as there is elements in tmp.".to_string()));
+            }
         }
+        Ok(())
     }
 
     let mut ret = token_base(s);
     token_complex(&mut ret);
-    token_garbage_collect(&mut ret);
-    ret
+    token_garbage_collect(&mut ret)?;
+    Ok(ret)
 }
 
 /// Parse a line of `MathValue` and make it into a tree of operations.
@@ -377,7 +385,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
 }
 
 pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
-    let mut tokens = math_token(s);
+    let mut tokens = math_token(s)?;
     math_parse(&mut tokens)?;
     read_named_variables(&mut tokens, map)?;
     read_numbers(&mut tokens)?;
@@ -555,23 +563,23 @@ fn i_to_f(i: i64) -> f64 {
 #[test]
 fn test_math_token() {
     let math_line = "+4/88*toto";
-    assert_eq!(math_token(math_line), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto"), TrailingError]);
+    assert_eq!(math_token(math_line).unwrap(), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto"), TrailingError]);
 }
 
 #[test]
 fn test_math_parse() {
     let math_line = "+88+89";
-    let mut tokens = math_token(math_line);
+    let mut tokens = math_token(math_line).unwrap();
     math_parse(&mut tokens).unwrap();
     assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89"), TrailingError]);
 
     let math_line = "-1*2+-3*4";
-    let mut tokens = math_token(math_line);
+    let mut tokens = math_token(math_line).unwrap();
     math_parse(&mut tokens).unwrap();
     assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4"), TrailingError]);
 
     let math_line = "(1+2)*(3+4)";
-    let mut tokens = math_token(math_line);
+    let mut tokens = math_token(math_line).unwrap();
     math_parse(&mut tokens).unwrap();
     assert_eq!(tokens, vec![
                Operation('*', 5, 6),
@@ -587,25 +595,25 @@ fn test_math_parse() {
                ParenClose(3),
                TrailingError]);
 
-    assert_eq!(math_parse(&mut math_token("33)")), Err(UnopenedParenthesis));
-    assert_eq!(math_parse(&mut math_token("((33)")), Err(UnclosedParenthesis));
-    assert_eq!(math_parse(&mut math_token("")), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("22+()")), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("33+*23")), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("*2")), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("2/")), Err(EmptyLine));
+    assert_eq!(math_parse(&mut math_token("33)").unwrap()), Err(UnopenedParenthesis));
+    assert_eq!(math_parse(&mut math_token("((33)").unwrap()), Err(UnclosedParenthesis));
+    assert_eq!(math_parse(&mut math_token("").unwrap()), Err(EmptyLine));
+    assert_eq!(math_parse(&mut math_token("22+()").unwrap()), Err(EmptyLine));
+    assert_eq!(math_parse(&mut math_token("33+*23").unwrap()), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse(&mut math_token("*2").unwrap()), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse(&mut math_token("2/").unwrap()), Err(EmptyLine));
 }
 
 #[test]
 fn test_reading_numbers() {
     let math_line = "100*0x10-2.5";
-    let mut tokens = math_token(math_line);
+    let mut tokens = math_token(math_line).unwrap();
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
     assert_eq!(tokens, vec![Operation('-', 3, 4), Value(Int(100)), Value(Int(0x10)), Operation('*', -2, -1), Value(Float(2.5)), TrailingError]);
 
     let math_line = "toto-0x10";
-    let mut tokens = math_token(math_line);
+    let mut tokens = math_token(math_line).unwrap();
     math_parse(&mut tokens).unwrap();
     assert_eq!(read_numbers(&mut tokens), Err(InvalidNumber("toto".to_string())));
 }
@@ -625,7 +633,7 @@ fn test_read_named_variables() {
 
 #[test]
 fn test_math_final_compute() {
-    let mut tokens = math_token("(3-5)*4");
+    let mut tokens = math_token("(3-5)*4").unwrap();
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
     let computation = math_final_compute(&tokens).unwrap();
@@ -635,7 +643,7 @@ fn test_math_final_compute() {
         panic!("Expected int.");
     }
 
-    let mut tokens = math_token("3++");
+    let mut tokens = math_token("3++").unwrap();
     math_parse(&mut tokens).unwrap();
     read_numbers(&mut tokens).unwrap();
     let computation = math_final_compute(&tokens);
