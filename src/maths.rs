@@ -52,7 +52,6 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
         let mut current_index = 0;
 
         for c in s.chars() {
-            println!("c = {}, ci = {}, nni = {}", c, current_index, new_name_index);
             if is_in(c, &MATH_CHARS) {
                 if new_name_index != !0 { // We were writing a work
                     ret.push(Name(&s[new_name_index..current_index]));
@@ -320,10 +319,8 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         Ok(())
     }
 
-    println!("Parse {:?}", line);
     unary_parse(line)?;
     paren_parse(line)?;
-    println!("after paren {:?}", line);
     all_but_paren_parse(line)?;
 
 
