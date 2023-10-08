@@ -25,7 +25,8 @@ pub enum MathParseErrors {
     /// A closing parenthesis was used with no matching open parenthesis.
     UnopenedParenthesis,
 
-    /// The math expression is empty.
+    /// The math expression is empty. Or the right hand side of an operator is
+    /// empty.
     EmptyLine,
 
     /// An expression that should have been a number but can't be read.
@@ -35,8 +36,7 @@ pub enum MathParseErrors {
     /// left hand side of an operator being empty.
     MisplacedOperator(char),
 
-    /// An operator is the last element of a line of math. Or the right hand
-    /// side of an operator is empty.
+    /// An operator is the last element of a line of math.
     TrailingOperator,
 
     /// A float could not be converted to an int.
@@ -50,4 +50,22 @@ pub enum MathParseErrors {
     MathParseInternalBug(String),
 }
 
-// TODO: display
+use MathParseErrors::*;
+use std::fmt;
+
+impl fmt::Display for MathParseErrors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UnclosedParenthesis => write!(f, "A parenthesis was opened but never closed."),
+            UnopenedParenthesis => write!(f, "A closing parenthesis was used with no matching open parenthesis."),
+            EmptyLine => write!(f, "The math expression is empty. Or the right hand side of an operator is empty."),
+            InvalidNumber(s) => write!(f, "The expression `{s}` that should have been a number but can't be read."),
+            MisplacedOperator(c) => write!(f, "The operator `{c}`is not where it should be. Or the left hand side of an operator being empty."),
+            TrailingOperator => write!(f, "An operator is the last element of a line of math."),
+            IntConversion(fp) => write!(f, "The floating point number {fp} could not be converted to an int which is needed."),
+            BinaryOpOnFloat(fp, c) => write!(f, "The bitwise operation `{c}` is being performed on the floating point number `{fp}`."),
+            MathParseInternalBug(s) => write!(f, "There is a bug in the math-parse library. The error message is the following:\n{s}\nPlease, report it with the input given to the library to the developer of math-parse over here: https://github.com/Arkaeriit/math-parse"),
+        }
+    }
+}
+
