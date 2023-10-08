@@ -13,3 +13,7 @@ homepage = "https://github.com/Arkaeriit/math-parse"
 name = "math_parse"
 path = "src/lib.rs"
 
+[[bin]]
+name = "math-parse-example"
+path = "src/example.rs"
+
