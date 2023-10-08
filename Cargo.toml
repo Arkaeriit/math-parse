@@ -2,7 +2,11 @@
 name = "math-parse"
 version = "0.1.0"
 edition = "2021"
+authors = ["Maxime Bouillot maxbouillot@gmail.com"]
+license = "BSD-3-Clause"
+description = "A library used to compute mathematical expressions given as strings."
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "math_parse"
+path = "src/lib.rs"
 
-[dependencies]
