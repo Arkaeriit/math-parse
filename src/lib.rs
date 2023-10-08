@@ -42,6 +42,9 @@ pub enum MathParseErrors {
     /// A float could not be converted to an int.
     IntConversion(f64),
 
+    /// A binary operation have been tried on a float.
+    BinaryOpOnFloat(f64, char),
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),

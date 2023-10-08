@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 8] = ['+', '-', '*', '/', '(', ')', '%', '⟌'];
+const MATH_CHARS: [char; 10] = ['+', '-', '*', '/', '(', ')', '%', '⟌', '!', '~'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -162,6 +162,12 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
                 Operator('-') => {
                     if previous_operator {
                         let _ = std::mem::replace(&mut line[i], UnaryOperation('-', 1));
+                    }
+                    previous_operator = true;
+                },
+                Operator('!') | Operator('~') => {
+                    if previous_operator {
+                        let _ = std::mem::replace(&mut line[i], UnaryOperation('!', 1));
                     }
                     previous_operator = true;
                 },
@@ -373,6 +379,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                 match op {
                     '+' => Ok(value),
                     '-' => Ok(Int(-1) * value),
+                    '!' => Ok((!value)?),
                     x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
                 }
             },
@@ -464,6 +471,17 @@ impl Rem for Number {
             (Float(s), Int(o))   => Float(s % i_to_f(o)),
             (Int(s),   Float(o)) => Float(i_to_f(s) % o),
             (Float(s), Float(o)) => Float(s % o),
+        }
+    }
+}
+
+impl Not for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn not(self) -> Result<Number, MathParseErrors> {
+        match self {
+            Int(s) => Ok(Int(!s)),
+            Float(s) => Err(BinaryOpOnFloat(s, '!')),
         }
     }
 }
@@ -685,6 +703,7 @@ fn test_math_compute() {
     compute_int("---+++-a", ----a);
     compute_int("3%8+99", 3%8+99);
     compute_int("10.0//3.0", 10/3);
+    compute_int("!-4", !-4);
 
     compute_float("4*9/4", 4.0*9.0/4.0);
     compute_float("4*9/4.0", 4.0*9.0/4.0);
