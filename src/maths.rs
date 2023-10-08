@@ -8,19 +8,37 @@ const MATH_CHARS: [char; 10] = ['+', '-', '*', '/', '(', ')', '%', '⟌', '!', '
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
-    TrailingError, // Placed at the last element of a line, used as a canary to catch misbehaving unary operators
-    NoMath, // Used to remove a math value that will need to be garbage collected.
-
     // Values used in parsing
+    /// A slice of the input string. As only a single string is used, the single
+    /// lifetime for the reference is well suited.
     Name(&'a str), 
+    /// A character from the MATH_CHAR list.
     Operator(char),
 
     // Values used in solving
+    /// A solved value.
     Value(Number),
+    /// A math operation. The character is the operator used and the two `isize`
+    /// are the offsets from the Operation to its two members.
     Operation(char, isize, isize),
+    /// An unary operator. The character is the operator used and the `isize` is
+    /// the offset from the `UnaryOperation` to the value the operator is used
+    /// on.
     UnaryOperation(char, isize),
-    ParenOpen(isize), // Value stored is the offset between the parenthesis' index and the index of what is inside
+    /// The start of a group in parenthesis. The `isize` if the offset between
+    /// the `ParenOpen` and the start of the inside of the parenthesis.
+    ParenOpen(isize),
+    /// The end of a group in parenthesis. The `usize` is the number of elements
+    /// inside of the group needed to fly back to the beginning if the
+    /// parenthesis group during parsing.
     ParenClose(usize),
+
+    // Special values
+    /// Placed at the last element of a line, used as a canary to catch
+    /// misbehaving unary operators.
+    TrailingError,
+    /// Used to remove a math value that will need to be garbage collected.
+    NoMath,
 }
 use MathValue::*;
 
@@ -110,7 +128,7 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
 
 /// Parse a line of `MathValue` and make it into a tree of operations.
 /// The root of the tree will be kept as the first element of the vector.
-// Here are some example of rearangements:
+// Here are some example of rearrangement:
 //                               
 // | 0 | + | 1 |                 
 //                               
@@ -391,6 +409,8 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
     math_compute_index(line, 0)
 }
 
+/// Does all the computation from a string with a line of math to the final
+/// resulting number.
 pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
     let mut tokens = math_token(s)?;
     math_parse(&mut tokens)?;
@@ -403,6 +423,9 @@ pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Nu
 
 use std::ops::*;
 
+/// A type representing the numbers understood by math-parse. Math operation can
+/// be formed with numbers of different types and the time of the result will
+/// be chosen in the most sensible way.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Number {
     Int(i64),
@@ -488,6 +511,7 @@ impl Not for Number {
 
 impl Number {
     fn integer_div(self, other: Self) -> Result<Self, MathParseErrors> {
+        // TODO: fix this broken logic
         let s = match self {
             Int(s) => s,
             Float(s) => f_to_i(s)?,
@@ -717,6 +741,5 @@ fn test_math_compute() {
     compute_float("4.0+9.0-4", 4.0+9.0-4.0);
     compute_float("4+9.0-4", 4.0+9.0-4.0);
     compute_float("4+9.0-4.0", 4.0+9.0-4.0);
-
 }
 

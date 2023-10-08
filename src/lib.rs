@@ -1,4 +1,4 @@
-/// Module containing the function to parse math expressions
+/// Module containing the function to parse math expressions.
 mod maths;
 
 use std::collections::HashMap;
