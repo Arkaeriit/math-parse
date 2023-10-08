@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["Maxime Bouillot maxbouillot@gmail.com"]
 license = "BSD-3-Clause"
 description = "A library used to compute mathematical expressions given as strings."
+documentation = "https://docs.rs/math-parse"
+repository = "https://github.com/Arkaeriit/math-parse"
+homepage = "https://github.com/Arkaeriit/math-parse"
 
 [lib]
 name = "math_parse"
