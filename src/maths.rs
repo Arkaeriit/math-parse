@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 10] = ['+', '-', '*', '/', '(', ')', '%', '⟌', '!', '~'];
+const MATH_CHARS: [char; 13] = ['+', '-', '−', '*', '×', '·', '/', '(', ')', '%', '⟌', '!', '~'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -62,7 +62,7 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
             } else if new_name_index == !0 {
                 new_name_index = current_index;
             }
-            current_index += 1;
+            current_index += c.len_utf8();
         }
 
         if new_name_index != !0 { // We were writing a work
@@ -177,7 +177,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
                     }
                     previous_operator = true;
                 },
-                Operator('-') => {
+                Operator('-') | Operator('−') => {
                     if previous_operator {
                         let _ = std::mem::replace(&mut line[i], UnaryOperation('-', 1));
                     }
@@ -315,8 +315,8 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     /// Parse everything except for parenthesis, which are already parsed
     /// recursively, and unary, which are parsed in a single pass.
     fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
-        parse_op(line, &['+', '-'])?;
-        parse_op(line, &['/', '*', '%', '⟌'])?;
+        parse_op(line, &['+', '-', '−'])?;
+        parse_op(line, &['/', '*', '×', '·', '%', '⟌'])?;
         Ok(())
     }
 
@@ -382,13 +382,13 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                 let target = add_index_offset(index, *offset_2)?;
                 let value_2 = math_compute_index(line, target)?;
                 match op {
-                    '*' => Ok(value_1 * value_2),
-                    '/' => Ok(value_1 / value_2),
-                    '+' => Ok(value_1 + value_2),
-                    '-' => Ok(value_1 - value_2),
-                    '%' => Ok(value_1 % value_2),
-                    '⟌' => Ok(value_1.integer_div(value_2)?),
-                    x => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
+                    '*' | '×' | '·' => Ok(value_1 * value_2),
+                    '/'             => Ok(value_1 / value_2),
+                    '+'             => Ok(value_1 + value_2),
+                    '-' | '−'       => Ok(value_1 - value_2),
+                    '%'             => Ok(value_1 % value_2),
+                    '⟌'             => Ok(value_1.integer_div(value_2)?),
+                    x               => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
             UnaryOperation(op, offset) => {
@@ -721,18 +721,18 @@ fn test_math_compute() {
         }
     }
     
-    compute_int("((3+3)*b+8)*(a-1)", ((3+3)*b+8)*(a-1));
+    compute_int("((3+3)·b+8)*(a-1)", ((3+3)*b+8)*(a-1));
     compute_int("0", 0);
-    compute_int("-a+b-c", -a+b-c);
-    compute_int("---+++-a", ----a);
+    compute_int("-a+b−c", -a+b-c);
+    compute_int("-−-+++-a", ----a);
     compute_int("3%8+99", 3%8+99);
     compute_int("10.0//3.0", 10/3);
     compute_int("!-4", !-4);
 
-    compute_float("4*9/4", 4.0*9.0/4.0);
-    compute_float("4*9/4.0", 4.0*9.0/4.0);
+    compute_float("4×9/4", 4.0*9.0/4.0);
+    compute_float("4×9/4.0", 4.0*9.0/4.0);
     compute_float("4.0*9/4", 4.0*9.0/4.0);
-    compute_float("4.0*9.0/4", 4.0*9.0/4.0);
+    compute_float("4.0·9.0/4", 4.0*9.0/4.0);
     compute_float("4*9.0/4", 4.0*9.0/4.0);
     compute_float("4*9.0/4.0", 4.0*9.0/4.0);
     compute_float("4.0+9-4", 4.0+9.0-4.0);
