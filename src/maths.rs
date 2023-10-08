@@ -4,11 +4,12 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 7] = ['+', '-', '*', '/', '(', ')', '%'];
+const MATH_CHARS: [char; 8] = ['+', '-', '*', '/', '(', ')', '%', '⟌'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
     TrailingError, // Placed at the last element of a line, used as a canary to catch misbehaving unary operators
+    NoMath, // Used to remove a math value that will need to be garbage collected.
 
     // Values used in parsing
     Name(&'a str), 
@@ -25,32 +26,79 @@ use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
 fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
-    let mut ret = Vec::<MathValue>::new();
-    let mut new_name_index = !0; // Word that we are writing, !0 indicate we were not writing anything.
-    let mut current_index = 0;
 
-    for c in s.chars() {
-        println!("c = {}, ci = {}, nni = {}", c, current_index, new_name_index);
-        if is_in(c, &MATH_CHARS) {
-            if new_name_index != !0 { // We were writing a work
-                ret.push(Name(&s[new_name_index..current_index]));
-                new_name_index = !0;
+    /// Reads name and operators in a line of math.
+    fn token_base<'a>(s: &'a str) -> Vec<MathValue<'a>> {
+        let mut ret = Vec::<MathValue>::new();
+        let mut new_name_index = !0; // Word that we are writing, !0 indicate we were not writing anything.
+        let mut current_index = 0;
+
+        for c in s.chars() {
+            println!("c = {}, ci = {}, nni = {}", c, current_index, new_name_index);
+            if is_in(c, &MATH_CHARS) {
+                if new_name_index != !0 { // We were writing a work
+                    ret.push(Name(&s[new_name_index..current_index]));
+                    new_name_index = !0;
+                }
+                ret.push(Operator(c));
+            } else if new_name_index == !0 {
+                new_name_index = current_index;
             }
-            ret.push(Operator(c));
-        } else if new_name_index == !0 {
-            new_name_index = current_index;
+            current_index += 1;
         }
-        current_index += 1;
+
+        if new_name_index != !0 { // We were writing a work
+            ret.push(Name(&s[new_name_index..]));
+        }
+        ret.push(TrailingError);
+        ret
     }
 
-    if new_name_index != !0 { // We were writing a work
-        ret.push(Name(&s[new_name_index..]));
+    /// Combine complex math symbols such as // to make operators
+    fn token_complex(line: &mut [MathValue]) {
+        for i in 1..line.len() {
+            let previous_op = if let Operator(c) = line[i-1] {
+                Some(c)
+            } else {
+                None
+            };
+            let current_op = if let Operator(c) = line[i] {
+                Some(c)
+            } else {
+                None
+            };
+            match (previous_op, current_op) {
+                (Some('/'), Some('/')) => {
+                    line[i-1] = Operator('⟌');
+                    line[i] = NoMath;
+                },
+                (_, _) => {},
+            }
+
+        }
     }
-    ret.push(TrailingError);
+
+    /// Removes all the NoMath elements from a slice.
+    /// Returns a slice which only contains useful elements.
+    fn token_garbage_collect(line: &mut Vec<MathValue>) {
+        let mut tmp = Vec::<MathValue>::new();
+        for _ in 0..line.len() {
+            let from = line.pop().expect("Should not happen as we do it as much as there is elements in tmp.");
+            if from != NoMath {
+                tmp.push(from);
+            }
+        }
+        // tmp is reversed so we want to reverse it back
+        for _ in 0..tmp.len() {
+            line.push(tmp.pop().expect("Should not happen as we do it as much as there is elements in tmp."));
+        }
+    }
+
+    let mut ret = token_base(s);
+    token_complex(&mut ret);
+    token_garbage_collect(&mut ret);
     ret
 }
-
-
 
 /// Parse a line of `MathValue` and make it into a tree of operations.
 /// The root of the tree will be kept as the first element of the vector.
@@ -236,7 +284,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     /// recursively, and unary, which are parsed in a single pass.
     fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         parse_op(line, &['+', '-'])?;
-        parse_op(line, &['/', '*', '%'])?;
+        parse_op(line, &['/', '*', '%', '⟌'])?;
         Ok(())
     }
 
@@ -307,6 +355,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     '+' => Ok(value_1 + value_2),
                     '-' => Ok(value_1 - value_2),
                     '%' => Ok(value_1 % value_2),
+                    '⟌' => Ok(value_1.integer_div(value_2)?),
                     x => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
@@ -408,6 +457,20 @@ impl Rem for Number {
             (Int(s),   Float(o)) => Float(i_to_f(s) % o),
             (Float(s), Float(o)) => Float(s % o),
         }
+    }
+}
+
+impl Number {
+    fn integer_div(self, other: Self) -> Result<Self, MathParseErrors> {
+        let s = match self {
+            Int(s) => s,
+            Float(s) => f_to_i(s)?,
+        };
+        let o = match other {
+            Int(o) => o,
+            Float(o) => f_to_i(o)?,
+        };
+        Ok(Int(s / o))
     }
 }
 
@@ -613,6 +676,7 @@ fn test_math_compute() {
     compute_int("-a+b-c", -a+b-c);
     compute_int("---+++-a", ----a);
     compute_int("3%8+99", 3%8+99);
+    compute_int("10.0//3.0", 10/3);
 
     compute_float("4*9/4", 4.0*9.0/4.0);
     compute_float("4*9/4.0", 4.0*9.0/4.0);
