@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 16] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~'];
+const MATH_CHARS: [char; 19] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~', '^', '&', '|'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -314,6 +314,9 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     /// Parse everything except for parenthesis, which are already parsed
     /// recursively, and unary, which are parsed in a single pass.
     fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
+        parse_op(line, &['|'])?;
+        parse_op(line, &['^'])?;
+        parse_op(line, &['&'])?;
         parse_op(line, &['+', '-', '−'])?;
         parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'])?;
         Ok(())
@@ -385,6 +388,9 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     '-' | '−'             => Ok(value_1 - value_2),
                     '%'                   => Ok(value_1 % value_2),
                     '⟌'                   => Ok(value_1.integer_div(value_2)?),
+                    '|'                   => Ok((value_1 | value_2)?),
+                    '&'                   => Ok((value_1 & value_2)?),
+                    '^'                   => Ok((value_1 ^ value_2)?),
                     x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
@@ -502,6 +508,45 @@ impl Not for Number {
         match self {
             Int(s) => Ok(Int(!s)),
             Float(s) => Err(BinaryOpOnFloat(s, '!')),
+        }
+    }
+}
+
+impl BitXor for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn bitxor(self, other: Self) -> Result<Number, MathParseErrors> {
+        match (self, other) {
+            (Int(s),   Int(o))   => Ok(Int(s ^ o)),
+            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '^')),
+            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '^')),
+            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '^')),
+        }
+    }
+}
+
+impl BitAnd for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn bitand(self, other: Self) -> Result<Number, MathParseErrors> {
+        match (self, other) {
+            (Int(s),   Int(o))   => Ok(Int(s & o)),
+            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '&')),
+            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '&')),
+            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '&')),
+        }
+    }
+}
+
+impl BitOr for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn bitor(self, other: Self) -> Result<Number, MathParseErrors> {
+        match (self, other) {
+            (Int(s),   Int(o))   => Ok(Int(s | o)),
+            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '|')),
+            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '|')),
+            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '|')),
         }
     }
 }

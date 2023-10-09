@@ -1,6 +1,6 @@
 # Math-Parse
 
-A fast library to compute the result of a math expression.
+A fast library to parse and then compute the result of a math expression.
 
 ## Example of use
 
@@ -47,6 +47,9 @@ The following operators are available:
 * `%`: Binary operator used to get the remainder of the integer division.
 * `//` or `⟌`: Binary operator used for integer division.
 * `!` or `~`: Unary operator used for the bitwise not operation.
+* `&`: Binary operator used for the bitwise and operation.
+* `^`: Binary operator used for the bitwise xor operation.
+* `|`: Binary operator used for the bitwise or operation.
 
 ## Number type
 
@@ -61,6 +64,9 @@ The operator precedence of Math-Parse is quite usual. Here is the operators sort
 1. unary `+, unary `-`, unary `!`
 2. `×`, `/`, `%`, `//
 3. binary `+, binary `-`
+4. `&`
+5. `^`
+6. `|`
 
 When multiple operators exist for a single operation, they all have the same precedence.
 
