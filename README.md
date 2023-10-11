@@ -53,7 +53,7 @@ The following operators are available:
 * `^`: Binary operator used for the bitwise xor operation.
 * `|`: Binary operator used for the bitwise or operation.
 * `<<` or `≪`: Binary operator for logical shift to the left.
-* `>>| or `≫`: Binary operator for logical shift to the right.
+* `>>` or `≫`: Binary operator for logical shift to the right.
 
 ## Number type
 
@@ -65,9 +65,9 @@ Operations can be made between multiple types of numbers. Addition, subtraction,
 
 The operator precedence of Math-Parse is quite usual. Here is the operators sorted in decreasing precedence:
 
-1. unary `+, unary `-`, unary `!`
-2. `×`, `/`, `%`, `//
-3. binary `+, binary `-`
+1. unary `+`, unary `-`, unary `!`
+2. `×`, `/`, `%`, `//`
+3. binary `+`, binary `-`
 4. `<<`, `>>`
 4. `&`
 5. `^`
