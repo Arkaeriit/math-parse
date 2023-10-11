@@ -59,6 +59,9 @@ pub enum MathParseErrors {
     /// We wanted to return an int but we got a float instead.
     ReturnFloatExpectedInt(f64),
 
+    /// A given operator was invalid, but we can suggest an other instead.
+    BadOperatorHint(char, &'static str),
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),
@@ -79,6 +82,7 @@ impl fmt::Display for MathParseErrors {
             IntConversion(fp) => write!(f, "The floating point number {fp} could not be converted to an int which is needed."),
             BinaryOpOnFloat(fp, c) => write!(f, "The bitwise operation `{c}` is being performed on the floating point number `{fp}`."),
             ReturnFloatExpectedInt(fp) => write!(f, "An integer was wanted but the floating point number `{fp}` was returned instead."),
+            BadOperatorHint(c, s) => write!(f, "The operator '{c}' is invalid. Did you meant '{s}'?"),
             MathParseInternalBug(s) => write!(f, "There is a bug in the math-parse library. The error message is the following:\n{s}\nPlease, report it with the input given to the library to the developer of math-parse over here: https://github.com/Arkaeriit/math-parse"),
         }
     }

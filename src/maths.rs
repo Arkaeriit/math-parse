@@ -4,7 +4,7 @@ use crate::MathParseErrors::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-const MATH_CHARS: [char; 19] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~', '^', '&', '|'];
+const MATH_CHARS: [char; 23] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~', '^', '&', '|', '≪', '<', '>', '≫'];
 
 #[derive(Debug, PartialEq)]
 enum MathValue<'a> {
@@ -89,9 +89,16 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
                     line[i-1] = Operator('⟌');
                     line[i] = NoMath;
                 },
+                (Some('<'), Some('<')) => {
+                    line[i-1] = Operator('≪');
+                    line[i] = NoMath;
+                },
+                (Some('>'), Some('>')) => {
+                    line[i-1] = Operator('≫');
+                    line[i] = NoMath;
+                },
                 (_, _) => {},
             }
-
         }
     }
 
@@ -317,6 +324,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         parse_op(line, &['|'])?;
         parse_op(line, &['^'])?;
         parse_op(line, &['&'])?;
+        parse_op(line, &['≪', '≫'])?;
         parse_op(line, &['+', '-', '−'])?;
         parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'])?;
         Ok(())
@@ -391,6 +399,10 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     '|'                   => Ok((value_1 | value_2)?),
                     '&'                   => Ok((value_1 & value_2)?),
                     '^'                   => Ok((value_1 ^ value_2)?),
+                    '≪'                   => Ok((value_1 << value_2)?),
+                    '≫'                   => Ok((value_1 >> value_2)?),
+                    '<'                   => Err(BadOperatorHint('<', "<<")),
+                    '>'                   => Err(BadOperatorHint('>', ">>")),
                     x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
                 }
             },
@@ -419,6 +431,7 @@ pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Nu
     math_parse(&mut tokens)?;
     read_named_variables(&mut tokens, map)?;
     read_numbers(&mut tokens)?;
+    println!("{:?}", tokens);
     Ok(math_final_compute(&tokens)?)
 }
 
@@ -516,11 +529,11 @@ impl BitXor for Number {
     type Output = Result<Number, MathParseErrors>;
     
     fn bitxor(self, other: Self) -> Result<Number, MathParseErrors> {
+        self.err_on_float('^')?;
+        other.err_on_float('^')?;
         match (self, other) {
             (Int(s),   Int(o))   => Ok(Int(s ^ o)),
-            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '^')),
-            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '^')),
-            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '^')),
+            _                    => Err(MathParseInternalBug("Invalid type check on binxor.".to_string())),
         }
     }
 }
@@ -529,11 +542,11 @@ impl BitAnd for Number {
     type Output = Result<Number, MathParseErrors>;
     
     fn bitand(self, other: Self) -> Result<Number, MathParseErrors> {
+        self.err_on_float('&')?;
+        other.err_on_float('&')?;
         match (self, other) {
             (Int(s),   Int(o))   => Ok(Int(s & o)),
-            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '&')),
-            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '&')),
-            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '&')),
+            _                    => Err(MathParseInternalBug("Invalid type check on binand.".to_string())),
         }
     }
 }
@@ -542,16 +555,51 @@ impl BitOr for Number {
     type Output = Result<Number, MathParseErrors>;
     
     fn bitor(self, other: Self) -> Result<Number, MathParseErrors> {
+        self.err_on_float('|')?;
+        other.err_on_float('|')?;
         match (self, other) {
             (Int(s),   Int(o))   => Ok(Int(s | o)),
-            (Float(s), Int(_))   => Err(BinaryOpOnFloat(s, '|')),
-            (Int(_),   Float(o)) => Err(BinaryOpOnFloat(o, '|')),
-            (Float(s), Float(_)) => Err(BinaryOpOnFloat(s, '|')),
+            _                    => Err(MathParseInternalBug("Invalid type check on binor.".to_string())),
+        }
+    }
+}
+
+impl Shl for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn shl(self, other: Self) -> Result<Number, MathParseErrors> {
+        self.err_on_float('≪')?;
+        other.err_on_float('≪')?;
+        match (self, other) {
+            (Int(s),   Int(o))   => Ok(Int(s << o)),
+            _                    => Err(MathParseInternalBug("Invalid type check on Shl.".to_string())),
+        }
+    }
+}
+
+impl Shr for Number {
+    type Output = Result<Number, MathParseErrors>;
+    
+    fn shr(self, other: Self) -> Result<Number, MathParseErrors> {
+        self.err_on_float('≫')?;
+        other.err_on_float('≫')?;
+        match (self, other) {
+            (Int(s),   Int(o))   => Ok(Int(s >> o)),
+            _                    => Err(MathParseInternalBug("Invalid type check on Shr.".to_string())),
         }
     }
 }
 
 impl Number {
+    /// Return an error related to the given operator if the number is a float.
+    fn err_on_float(self, op: char) -> Result<(), MathParseErrors> {
+        if let Float(f) = self {
+            Err(BinaryOpOnFloat(f, op))
+        } else {
+            Ok(())
+        }
+    }
+
     fn integer_div(self, other: Self) -> Result<Self, MathParseErrors> {
         // TODO: fix this broken logic
         let s = match self {
