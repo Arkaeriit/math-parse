@@ -73,6 +73,10 @@ The operator precedence of Math-Parse is quite usual. Here is the operators sort
 
 When multiple operators exist for a single operation, they all have the same precedence.
 
+## Invalid operations
+
+Some operations are invalid such as a division by zero, or a logical shift with a negative number. If such an operation is encountered, an error will be returned.
+
 ## Example program
 
 You can find in this repo `src/example.rs` which is a small program that uses Math-Parse to compute the mathematical expression given as command line arguments.
