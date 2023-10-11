@@ -391,10 +391,10 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                 let value_2 = math_compute_index(line, target)?;
                 match op {
                     '*' | '×' | '·'       => Ok(value_1 * value_2),
-                    '/' | '∕' | '⁄' | '÷' => Ok(value_1 / value_2),
+                    '/' | '∕' | '⁄' | '÷' => Ok((value_1 / value_2)?),
                     '+'                   => Ok(value_1 + value_2),
                     '-' | '−'             => Ok(value_1 - value_2),
-                    '%'                   => Ok(value_1 % value_2),
+                    '%'                   => Ok((value_1 % value_2)?),
                     '⟌'                   => Ok(value_1.integer_div(value_2)?),
                     '|'                   => Ok((value_1 | value_2)?),
                     '&'                   => Ok((value_1 & value_2)?),
@@ -431,7 +431,6 @@ pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Nu
     math_parse(&mut tokens)?;
     read_named_variables(&mut tokens, map)?;
     read_numbers(&mut tokens)?;
-    println!("{:?}", tokens);
     Ok(math_final_compute(&tokens)?)
 }
 
@@ -489,27 +488,29 @@ impl Mul for Number {
 }
 
 impl Div for Number {
-    type Output = Self;
+    type Output = Result<Number, MathParseErrors>;
     
-    fn div(self, other: Self) -> Self {
+    fn div(self, other: Self) -> Result<Self, MathParseErrors> {
+        other.err_on_zero()?;
         match (self, other) {
-            (Int(s),   Int(o))   => Float(i_to_f(s) / i_to_f(o)),
-            (Float(s), Int(o))   => Float(s / i_to_f(o)),
-            (Int(s),   Float(o)) => Float(i_to_f(s) / o),
-            (Float(s), Float(o)) => Float(s / o),
+            (Int(s),   Int(o))   => Ok(Float(i_to_f(s) / i_to_f(o))),
+            (Float(s), Int(o))   => Ok(Float(s / i_to_f(o))),
+            (Int(s),   Float(o)) => Ok(Float(i_to_f(s) / o)),
+            (Float(s), Float(o)) => Ok(Float(s / o)),
         }
     }
 }
 
 impl Rem for Number {
-    type Output = Self;
+    type Output = Result<Number, MathParseErrors>;
     
-    fn rem(self, other: Self) -> Self {
+    fn rem(self, other: Self) -> Result<Self, MathParseErrors> {
+        other.err_on_zero()?;
         match (self, other) {
-            (Int(s),   Int(o))   => Int(s % o),
-            (Float(s), Int(o))   => Float(s % i_to_f(o)),
-            (Int(s),   Float(o)) => Float(i_to_f(s) % o),
-            (Float(s), Float(o)) => Float(s % o),
+            (Int(s),   Int(o))   => Ok(Int(s % o)),
+            (Float(s), Int(o))   => Ok(Float(s % i_to_f(o))),
+            (Int(s),   Float(o)) => Ok(Float(i_to_f(s) % o)),
+            (Float(s), Float(o)) => Ok(Float(s % o)),
         }
     }
 }
@@ -570,6 +571,7 @@ impl Shl for Number {
     fn shl(self, other: Self) -> Result<Number, MathParseErrors> {
         self.err_on_float('≪')?;
         other.err_on_float('≪')?;
+        other.err_on_negative()?;
         match (self, other) {
             (Int(s),   Int(o))   => Ok(Int(s << o)),
             _                    => Err(MathParseInternalBug("Invalid type check on Shl.".to_string())),
@@ -583,6 +585,7 @@ impl Shr for Number {
     fn shr(self, other: Self) -> Result<Number, MathParseErrors> {
         self.err_on_float('≫')?;
         other.err_on_float('≫')?;
+        other.err_on_negative()?;
         match (self, other) {
             (Int(s),   Int(o))   => Ok(Int(s >> o)),
             _                    => Err(MathParseInternalBug("Invalid type check on Shr.".to_string())),
@@ -600,7 +603,41 @@ impl Number {
         }
     }
 
+    /// Return true if the number is equal to 0.
+    fn is_zero(self) -> bool {
+        match self {
+            Int(i) => i == 0,
+            Float(f) => f == 0.0,
+        }
+    }
+
+    /// Return an error if the given number is 0.
+    fn err_on_zero(self) -> Result<(), MathParseErrors> {
+        if self.is_zero() {
+            Err(UnexpectedZero)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Return true if the number is less than 0.
+    fn is_negative(self) -> bool {
+        match self {
+            Int(i) => i < 0,
+            Float(f) => f < 0.0,
+        }
+    }
+
+    /// Return an error if the given number is negative.
+    fn err_on_negative(self) -> Result<(), MathParseErrors> {
+        if self.is_negative() {
+            Err(UnexpectedNegative)
+        } else {
+            Ok(())
+        }
+    }
     fn integer_div(self, other: Self) -> Result<Self, MathParseErrors> {
+        other.err_on_zero()?;
         // TODO: fix this broken logic
         let s = match self {
             Int(s) => s,

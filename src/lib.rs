@@ -62,6 +62,12 @@ pub enum MathParseErrors {
     /// A given operator was invalid, but we can suggest an other instead.
     BadOperatorHint(char, &'static str),
 
+    /// There was an unwanted zero.
+    UnexpectedZero,
+
+    /// There was an unwanted negative number.
+    UnexpectedNegative,
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),
@@ -83,6 +89,8 @@ impl fmt::Display for MathParseErrors {
             BinaryOpOnFloat(fp, c) => write!(f, "The bitwise operation `{c}` is being performed on the floating point number `{fp}`."),
             ReturnFloatExpectedInt(fp) => write!(f, "An integer was wanted but the floating point number `{fp}` was returned instead."),
             BadOperatorHint(c, s) => write!(f, "The operator '{c}' is invalid. Did you meant '{s}'?"),
+            UnexpectedZero => write!(f, "There is a 0 in an operation where it is invalid such as a division or a remainder."),
+            UnexpectedNegative => write!(f, "There is a negative number in an operation where it is invalid such as a logical shift."),
             MathParseInternalBug(s) => write!(f, "There is a bug in the math-parse library. The error message is the following:\n{s}\nPlease, report it with the input given to the library to the developer of math-parse over here: https://github.com/Arkaeriit/math-parse"),
         }
     }
