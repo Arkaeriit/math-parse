@@ -727,6 +727,11 @@ fn i_to_f(i: i64) -> f64 {
     i as f64
 }
 
+/// Return true if the given string contains any math char
+pub fn contains_math_char(s: &str) -> bool {
+    s.contains(MATH_CHARS)
+}
+
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]

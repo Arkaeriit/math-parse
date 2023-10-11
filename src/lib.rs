@@ -24,6 +24,12 @@ pub fn math_parse_float(expression: &str, variable_map: Option<&HashMap<String, 
     }
 }
 
+/// Return true if the given string contains any character that are used as
+/// operators inside of math-parse
+pub fn contains_math_char(s: &str) -> bool {
+    maths::contains_math_char(s)
+}
+
 /* --------------------------------- Errors --------------------------------- */
 
 /// Type used to represent any errors that can happen in the parsing of a math

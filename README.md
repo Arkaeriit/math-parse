@@ -14,9 +14,11 @@ println!("{num2}"); // Prints 6.625
 
 ## API
 
-Math-Parse only exposes two functions, `math_parse_int` and `math_parse_float`. Both take as first argument a `&str` which is a mathematical expression and as second argument an optional map of named variable.
+Math-Parse only exposes two principal functions, `math_parse_int` and `math_parse_float`. Both take as first argument a `&str` which is a mathematical expression and as second argument an optional map of named variable.
 
 Both functions return `Ok(num)` if the computation can be done, where `num` is an `i64` for `math_parse_int` or a `f64` for `math_parse_float`. If the computation can't be done, they return `Err(err)` where `err` is a `MathParseErrors`. The type `MathParseErrors` implements the trait `Display` which format it into an error message that can be read by a human.
+
+An additional third function is exposed, `contains_math_char`. This function takes a string as argument and returns true if it contains any character that is considered an operator by Math-Parse. It is meant to sanitize data used around Math-Parse.
 
 Check https://docs.rs/math-parse for more information.
 
