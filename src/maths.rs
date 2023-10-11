@@ -638,8 +638,8 @@ impl Number {
     }
     fn integer_div(self, other: Self) -> Result<Self, MathParseErrors> {
         other.err_on_zero()?;
-        // TODO: fix this broken logic
-        let s = match self {
+        let s = self - (self % other)?;
+        let s = match s {
             Int(s) => s,
             Float(s) => f_to_i(s)?,
         };
