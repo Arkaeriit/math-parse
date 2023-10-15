@@ -404,8 +404,79 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
             x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
         }
     }
+        enum idk {
+            Unary(usize),
+            BinaryLeft(usize, usize),
+            BinaryRight(usize),
+        };
+        use idk::*;
+
+    fn read_da_number(num: Number, value_stack: &mut Vec<Number>, index_stack: &mut Vec<idk>, line: &[MathValue]) -> Result<usize, MathParseErrors> {
+        let mut index_ret = 0;
+        let mut number = num;
+
+        loop { // Not infinite as we know that the stacks are not infinite
+            if index_stack.len() == 0 {
+                value_stack.push(number);
+                return Ok(0); // ???
+            }
+
+            match index_stack.pop().expect("lol") {
+                Unary(index) => {
+                    let op = if let UnaryOperation(op, _) = line[index] {
+                        op
+                    } else {
+                        return Err(MathParseInternalBug("Incoherent unary index.".to_string()));
+                    };
+                    number = compute_unary(op, number)?;
+                },
+                BinaryRight(index) => {
+                    let op = if let Operation(op, _, _) = line[index] {
+                        op
+                    } else {
+                        return Err(MathParseInternalBug("Incoherent binary index.".to_string()));
+                    };
+                    number = compute_operation(op, number, value_stack.pop().expect("lol"))?;
+                },
+                BinaryLeft(stack_index, line_offset) => {
+                    index_stack.push(BinaryRight(stack_index));
+                    value_stack.push(number);
+                    return Ok(line_offset);
+                },
+            }
+        }
+    }
 
     fn math_compute_index(line: &[MathValue], index: usize) -> Result<Number, MathParseErrors> {
+        let mut index_stack = Vec::<idk>::new();
+        let mut value_stack = Vec::<Number>::new();
+        let mut current_index = 0;
+
+        for _ in 0..line.len() {
+            match &line[current_index] {
+                ParenOpen(offset) => {current_index = add_index_offset(current_index, *offset)?;},
+                UnaryOperation(op, offset) => {
+                    index_stack.push(Unary(current_index));
+                    current_index = add_index_offset(current_index, *offset)?;
+                },
+                Operation(op, offset_1, offset_2) => {
+                    index_stack.push(BinaryLeft(current_index, add_index_offset(current_index, *offset_1)?));
+                    current_index = add_index_offset(current_index, *offset_2)?;
+                },
+                Value(number) => {
+                    current_index = read_da_number(*number, &mut value_stack, &mut index_stack, line)?;
+                    if current_index == 0 {
+                        return Ok(value_stack.pop().expect("lol"));
+                    }
+                }
+                TrailingError => {return Err(TrailingOperator);},
+                x => {return Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier.")));},
+            }
+        }
+        Ok(value_stack.pop().expect("lol"))
+
+        /*
+
         match &line[index] {
             Value(number) => Ok(*number),
             ParenOpen(offset) => {
@@ -427,6 +498,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
             TrailingError => Err(TrailingOperator),
             x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
         }
+        */
     }
 
     math_compute_index(line, 0)
