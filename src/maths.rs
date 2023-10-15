@@ -373,44 +373,56 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
 /// and returns a computed result.
 fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
 
+    /// Performs the computation and error checking needed to solve
+    /// binary operations.
+    fn compute_operation(op: char, value_1: Number, value_2: Number) -> Result<Number, MathParseErrors> {
+        match op {
+            '*' | '×' | '·'       => Ok(value_1 * value_2),
+            '/' | '∕' | '⁄' | '÷' => Ok((value_1 / value_2)?),
+            '+'                   => Ok(value_1 + value_2),
+            '-' | '−'             => Ok(value_1 - value_2),
+            '%'                   => Ok((value_1 % value_2)?),
+            '⟌'                   => Ok(value_1.integer_div(value_2)?),
+            '|'                   => Ok((value_1 | value_2)?),
+            '&'                   => Ok((value_1 & value_2)?),
+            '^'                   => Ok((value_1 ^ value_2)?),
+            '≪'                   => Ok((value_1 << value_2)?),
+            '≫'                   => Ok((value_1 >> value_2)?),
+            '<'                   => Err(BadOperatorHint('<', "<<")),
+            '>'                   => Err(BadOperatorHint('>', ">>")),
+            x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
+        }
+    }
+
+    /// Performs the computation and error checking needed to solve
+    /// unary operations.
+    fn compute_unary(op: char, value: Number) -> Result<Number, MathParseErrors> {
+        match op {
+            '+' => Ok(value),
+            '-' => Ok(Int(-1) * value),
+            '!' => Ok((!value)?),
+            x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
+        }
+    }
+
     fn math_compute_index(line: &[MathValue], index: usize) -> Result<Number, MathParseErrors> {
         match &line[index] {
             Value(number) => Ok(*number),
             ParenOpen(offset) => {
                 let target = add_index_offset(index, *offset)?;
-                Ok(math_compute_index(line, target)?)
+                math_compute_index(line, target)
             },
             Operation(op, offset_1, offset_2) => {
                 let target = add_index_offset(index, *offset_1)?;
                 let value_1 = math_compute_index(line, target)?;
                 let target = add_index_offset(index, *offset_2)?;
                 let value_2 = math_compute_index(line, target)?;
-                match op {
-                    '*' | '×' | '·'       => Ok(value_1 * value_2),
-                    '/' | '∕' | '⁄' | '÷' => Ok((value_1 / value_2)?),
-                    '+'                   => Ok(value_1 + value_2),
-                    '-' | '−'             => Ok(value_1 - value_2),
-                    '%'                   => Ok((value_1 % value_2)?),
-                    '⟌'                   => Ok(value_1.integer_div(value_2)?),
-                    '|'                   => Ok((value_1 | value_2)?),
-                    '&'                   => Ok((value_1 & value_2)?),
-                    '^'                   => Ok((value_1 ^ value_2)?),
-                    '≪'                   => Ok((value_1 << value_2)?),
-                    '≫'                   => Ok((value_1 >> value_2)?),
-                    '<'                   => Err(BadOperatorHint('<', "<<")),
-                    '>'                   => Err(BadOperatorHint('>', ">>")),
-                    x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
-                }
+                compute_operation(*op, value_1, value_2)
             },
             UnaryOperation(op, offset) => {
                 let target = add_index_offset(index, *offset)?;
                 let value = math_compute_index(line, target)?;
-                match op {
-                    '+' => Ok(value),
-                    '-' => Ok(Int(-1) * value),
-                    '!' => Ok((!value)?),
-                    x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
-                }
+                compute_unary(*op, value)
             },
             TrailingError => Err(TrailingOperator),
             x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
