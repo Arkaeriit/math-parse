@@ -404,24 +404,72 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
             x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
         }
     }
-        enum idk {
-            Unary(usize),
-            BinaryLeft(usize, usize),
-            BinaryRight(usize),
-        };
-        use idk::*;
 
-    fn read_da_number(num: Number, value_stack: &mut Vec<Number>, index_stack: &mut Vec<idk>, line: &[MathValue]) -> Result<usize, MathParseErrors> {
-        let mut index_ret = 0;
+
+    /// This function does most of the work in the computation. The line is a
+    /// tree, but we can't do a naive recursive traversal as we want to process
+    /// input of any size without stack overflow. We thus have to do an
+    /// iterative approach but we use home managed stacks to keep the same logic
+    /// as a recursive approach.
+    fn math_compute_base(line: &[MathValue]) -> Result<Number, MathParseErrors> {
+        let mut index_stack = Vec::<ProcessedValues>::new();
+        let mut value_stack = Vec::<Number>::new();
+        let mut current_index = 0;
+
+        for _ in 0..line.len() {
+            match &line[current_index] {
+                ParenOpen(offset) => {current_index = add_index_offset(current_index, *offset)?;},
+                UnaryOperation(_op, offset) => {
+                    index_stack.push(Unary(current_index));
+                    current_index = add_index_offset(current_index, *offset)?;
+                },
+                Operation(_op, offset_1, offset_2) => {
+                    index_stack.push(BinaryLeft(current_index, add_index_offset(current_index, *offset_1)?));
+                    current_index = add_index_offset(current_index, *offset_2)?;
+                },
+                Value(number) => {
+                    current_index = processe_stacks_on_numbers(*number, &mut value_stack, &mut index_stack, line)?;
+                    if current_index == !0 {
+                        return if let Some(number) = value_stack.pop() {
+                            Ok(number)
+                        } else {
+                            Err(MathParseInternalBug("If the stack reading function indicated the end of stacks, it should have pushed a number of the value stack.".to_string()))
+                        };
+                    }
+                }
+                TrailingError => {return Err(TrailingOperator);},
+                x => {return Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_base. It should have been replaced earlier.")));},
+            }
+        }
+        Err(MathParseInternalBug("Should not have left the compute_index loop".to_string()))
+    }
+
+    /// One if the stacks used is to keep track of operations encountered. We
+    /// store the index in the input line of the operation and of one argument
+    /// for the branching in binary operations.
+    enum ProcessedValues {
+        Unary(usize),
+        BinaryLeft(usize, usize),
+        BinaryRight(usize),
+    }
+    use ProcessedValues::*;
+
+    /// Once we hit a number, we want to go back in our stacks and apply the
+    /// operations until we empty the stacks or we go to a binary operator that
+    /// need branching.
+    fn processe_stacks_on_numbers(num: Number, value_stack: &mut Vec<Number>, index_stack: &mut Vec<ProcessedValues>, line: &[MathValue]) -> Result<usize, MathParseErrors> {
         let mut number = num;
 
         loop { // Not infinite as we know that the stacks are not infinite
-            if index_stack.len() == 0 {
-                value_stack.push(number);
-                return Ok(0); // ???
-            }
 
-            match index_stack.pop().expect("lol") {
+            let processed_index = if let Some(processed_index) = index_stack.pop() {
+                processed_index
+            } else {
+                value_stack.push(number);
+                return Ok(!0); // This special value is used to indicate that there is no computations left to do
+            };
+
+            match processed_index {
                 Unary(index) => {
                     let op = if let UnaryOperation(op, _) = line[index] {
                         op
@@ -436,7 +484,12 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     } else {
                         return Err(MathParseInternalBug("Incoherent binary index.".to_string()));
                     };
-                    number = compute_operation(op, number, value_stack.pop().expect("lol"))?;
+                    let other_number = if let Some(other_number) = value_stack.pop() {
+                        other_number
+                    } else {
+                        return Err(MathParseInternalBug("In a binary right, there should have been a value placed on the stack.".to_string()));
+                    };
+                    number = compute_operation(op, number, other_number)?;
                 },
                 BinaryLeft(stack_index, line_offset) => {
                     index_stack.push(BinaryRight(stack_index));
@@ -447,61 +500,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
         }
     }
 
-    fn math_compute_index(line: &[MathValue], index: usize) -> Result<Number, MathParseErrors> {
-        let mut index_stack = Vec::<idk>::new();
-        let mut value_stack = Vec::<Number>::new();
-        let mut current_index = 0;
-
-        for _ in 0..line.len() {
-            match &line[current_index] {
-                ParenOpen(offset) => {current_index = add_index_offset(current_index, *offset)?;},
-                UnaryOperation(op, offset) => {
-                    index_stack.push(Unary(current_index));
-                    current_index = add_index_offset(current_index, *offset)?;
-                },
-                Operation(op, offset_1, offset_2) => {
-                    index_stack.push(BinaryLeft(current_index, add_index_offset(current_index, *offset_1)?));
-                    current_index = add_index_offset(current_index, *offset_2)?;
-                },
-                Value(number) => {
-                    current_index = read_da_number(*number, &mut value_stack, &mut index_stack, line)?;
-                    if current_index == 0 {
-                        return Ok(value_stack.pop().expect("lol"));
-                    }
-                }
-                TrailingError => {return Err(TrailingOperator);},
-                x => {return Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier.")));},
-            }
-        }
-        Ok(value_stack.pop().expect("lol"))
-
-        /*
-
-        match &line[index] {
-            Value(number) => Ok(*number),
-            ParenOpen(offset) => {
-                let target = add_index_offset(index, *offset)?;
-                math_compute_index(line, target)
-            },
-            Operation(op, offset_1, offset_2) => {
-                let target = add_index_offset(index, *offset_1)?;
-                let value_1 = math_compute_index(line, target)?;
-                let target = add_index_offset(index, *offset_2)?;
-                let value_2 = math_compute_index(line, target)?;
-                compute_operation(*op, value_1, value_2)
-            },
-            UnaryOperation(op, offset) => {
-                let target = add_index_offset(index, *offset)?;
-                let value = math_compute_index(line, target)?;
-                compute_unary(*op, value)
-            },
-            TrailingError => Err(TrailingOperator),
-            x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_index. It should have been replaced earlier."))),
-        }
-        */
-    }
-
-    math_compute_index(line, 0)
+    math_compute_base(line)
 }
 
 /// Does all the computation from a string with a line of math to the final
