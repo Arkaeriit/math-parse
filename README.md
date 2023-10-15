@@ -29,14 +29,13 @@ The second argument of Math-Parse's functions is a map of named variables. It's 
 ```rust
 let variables = HashMap::from([
     ("a".to_string(), "1".to_string()),
-    ("b".to_string(), "a".to_string()),
-    ("c".to_string(), "3*3".to_string()),
+    ("b".to_string(), "3*3".to_string()),
 ]);
-let result = math_parse_int("a+b+c", Some(&variables));
-println!("{result}"); // Prints 11
+let result = math_parse_int("a+b", Some(&variables));
+println!("{result}"); // Prints 10
 ```
 
-As you can see, the values in the map can be used recursively (`b` refers to `a`) and can be mathematical expressions (`c` is equal to `3*3`). This makes the map very powerful but be careful if you use those features. It's possible to create infinite loops in the decoding of the variables (I might need to change that latter on).
+As you can see, the values in the map be mathematical expressions (`c` is equal to `3*3`). This makes the map quite powerful. But as the expansion is not done recursively, the value of named variable can not contains other named variables.
 
 ## Available operators
 

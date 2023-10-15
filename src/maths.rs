@@ -349,8 +349,7 @@ fn read_numbers(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 }
 
 /// Reads all Names from a line of math and transform any name being a key in
-/// the map to it's value. Keeps trying with the result and then, try to make
-/// it into a number.
+/// the map to it's value.
 /// If map is None, nothing is done.
 fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
     let map = if let Some(m) = map {
@@ -361,11 +360,8 @@ fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, Str
 
     for i in 0..line.len() {
         if let Name(name) = &line[i] {
-            if let Some(mut new_name) = map.get(&name.to_string()) {
-                while let Some(newer_name) = map.get(new_name) {
-                    new_name = newer_name;
-                }
-                let num = math_compute(&new_name, Some(map))?;
+            if let Some(new_name) = map.get(&name.to_string()) {
+                let num = math_compute(&new_name, None)?;
                 let _ = std::mem::replace(&mut line[i], Value(num));
             }
         }
@@ -800,9 +796,11 @@ fn test_read_named_variables() {
         ("indirect_2".to_string(), "indirect_3".to_string()),
         ("indirect_1".to_string(), "indirect_2".to_string()),
     ]);
-    let mut tokens = vec![Name("3"), Name("indirect_1"), Name("direct_1")];
+    let mut tokens = vec![Name("3"), Name("direct_1")];
     read_named_variables(&mut tokens, Some(&variables)).unwrap();
-    assert_eq!(tokens, vec![Name("3"), Value(Int(2)), Value(Float(1.0))]);
+    assert_eq!(tokens, vec![Name("3"), Value(Float(1.0))]);
+    let mut tokens = vec![Name("3"), Name("indirect_1"), Name("direct_1")];
+    assert_eq!(read_named_variables(&mut tokens, Some(&variables)), Err(InvalidNumber("indirect_2".to_string())));
 }
 
 #[test]
