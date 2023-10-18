@@ -219,42 +219,44 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         Ok(())
     }
 
-    /// Transform content in parenthesis into a root element.
-    fn paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
-        let mut paren_open_index = 0;
-        let mut paren_depth = 0;
-        for i in 0..line.len() {
-            if paren_depth == 0 {
-                if let Operator('(') = line[i] {
-                    paren_open_index = i;
-                    paren_depth = 1;
-                } else if let Operator(')') = line[i] {
+    /// Parse the first group in parenthesis that will be closed first.
+    /// Return true if a parenthesis group was parsed and false otherwise.
+    fn single_paren_parse(line: &mut [MathValue]) -> Result<bool, MathParseErrors> {
+        // TODO: Maybe not n²...
+        let mut i = 0;
+        let mut maybe_paren_open_index = None;
+        while i < line.len() {
+            if let Operator('(') = line[i] {
+                maybe_paren_open_index = Some(i);
+            } else if let Operator(')') = line[i] {
+                let paren_open_index = if let Some(index) = maybe_paren_open_index {
+                    index
+                } else {
                     return Err(UnopenedParenthesis);
-                }
-            } else {
-                if let Operator('(') = line[i] {
-                    paren_depth += 1;
-                } else if let Operator(')') = line[i] {
-                    paren_depth -= 1;
-                    if paren_depth == 0 { // We finally closed the parenthesis
-                        let size_between_paren = i - paren_open_index - 1;
-                        let (before_used, used_slice_and_end) = line.split_at_mut(paren_open_index+1);
-                        let (used_slice, after_used) = used_slice_and_end.split_at_mut(size_between_paren);
-                        math_parse(used_slice)?;
-                        let open  = ParenOpen(1);
-                        let close = ParenClose(size_between_paren);
-                        let _ = std::mem::replace(&mut before_used[paren_open_index], open);
-                        let _ = std::mem::replace(&mut after_used[0], close);
-                    }
-                }
+                };
+                let size_between_paren = i - paren_open_index - 1;
+                let (before_used, used_slice_and_end) = line.split_at_mut(paren_open_index+1);
+                let (used_slice, after_used) = used_slice_and_end.split_at_mut(size_between_paren);
+                all_but_paren_parse(used_slice)?;
+                let open  = ParenOpen(1);
+                let close = ParenClose(size_between_paren);
+                let _ = std::mem::replace(&mut before_used[paren_open_index], open);
+                let _ = std::mem::replace(&mut after_used[0], close);
+                return Ok(true);
             }
+            i += 1;
         }
-
-        if paren_depth != 0 {
+        if let Some(_) = maybe_paren_open_index {
             Err(UnclosedParenthesis)
         } else {
-            Ok(())
+            Ok(false)
         }
+    }
+
+    /// Transform content in parenthesis into a root element.
+    fn paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
+        while single_paren_parse(line)? {}
+        Ok(())
     }
 
     /// Convert two slices and a symbol into a `MathOp`
