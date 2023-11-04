@@ -304,7 +304,7 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         parse_op(line, &['|'])?;
         parse_op(line, &['^'])?;
         parse_op(line, &['&'])?;
-        parse_op(line, &['≪', '≫'])?;
+        parse_op(line, &['≪', '≫', '<', '>'])?;
         parse_op(line, &['+', '-', '−'])?;
         parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'])?;
         Ok(())
