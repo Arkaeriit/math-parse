@@ -408,7 +408,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
                     current_index = add_index_offset(current_index, *offset_2)?;
                 },
                 Value(number) => {
-                    current_index = processe_stacks_on_numbers(*number, &mut value_stack, &mut operation_stack)?;
+                    current_index = processe_stacks_of_numbers(*number, &mut value_stack, &mut operation_stack)?;
                     if current_index == !0 {
                         return if let Some(number) = value_stack.pop() {
                             Ok(number)
@@ -437,7 +437,7 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
     /// Once we hit a number, we want to go back in our stacks and apply the
     /// operations until we empty the stacks or we go to a binary operator that
     /// need branching.
-    fn processe_stacks_on_numbers(num: Number, value_stack: &mut Vec<Number>, operation_stack: &mut Vec<ProcessedValues>) -> Result<usize, MathParseErrors> {
+    fn processe_stacks_of_numbers(num: Number, value_stack: &mut Vec<Number>, operation_stack: &mut Vec<ProcessedValues>) -> Result<usize, MathParseErrors> {
         let mut number = num;
 
         loop { // Not infinite as we know that the stacks are not infinite
