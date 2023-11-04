@@ -37,8 +37,6 @@ enum MathValue<'a> {
     /// Placed at the last element of a line, used as a canary to catch
     /// misbehaving unary operators.
     TrailingError,
-    /// Used to remove a math value that will need to be garbage collected.
-    NoMath,
 }
 use MathValue::*;
 
@@ -87,48 +85,23 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
             match (previous_op, current_op) {
                 (Some('/'), Some('/')) => {
                     line[i-1] = Operator('⟌');
-                    line[i] = NoMath;
+                    line[i] = ParenOpen(1); // Here and for the wollowing tokens, the ParenOpen(1) is used as a pointer to the next token, acting as if one of the two tokens of the complex is removed.
                 },
                 (Some('<'), Some('<')) => {
                     line[i-1] = Operator('≪');
-                    line[i] = NoMath;
+                    line[i] = ParenOpen(1);
                 },
                 (Some('>'), Some('>')) => {
                     line[i-1] = Operator('≫');
-                    line[i] = NoMath;
+                    line[i] = ParenOpen(1);
                 },
                 (_, _) => {},
             }
         }
     }
 
-    /// Removes all the NoMath elements from a slice.
-    /// Returns a slice which only contains useful elements.
-    fn token_garbage_collect(line: &mut Vec<MathValue>) -> Result<(), MathParseErrors> {
-        let mut tmp = Vec::<MathValue>::new();
-        for _ in 0..line.len() {
-            if let Some(from) = line.pop() {
-                if from != NoMath {
-                    tmp.push(from);
-                }
-            } else {
-                return Err(MathParseInternalBug("Should not happen as we do it as much as there is elements in line.".to_string()));
-            }
-        }
-        // tmp is reversed so we want to reverse it back
-        for _ in 0..tmp.len() {
-            if let Some(to) = tmp.pop() {
-                line.push(to);
-            } else {
-                return Err(MathParseInternalBug("Should not happen as we do it as much as there is elements in tmp.".to_string()));
-            }
-        }
-        Ok(())
-    }
-
     let mut ret = token_base(s);
     token_complex(&mut ret);
-    token_garbage_collect(&mut ret)?;
     Ok(ret)
 }
 
@@ -208,6 +181,9 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
                     previous_operator = true;
                 },
                 Name(_) => {
+                    previous_operator = false;
+                },
+                ParenOpen(_) => {
                     previous_operator = false;
                 },
                 TrailingError => {},
