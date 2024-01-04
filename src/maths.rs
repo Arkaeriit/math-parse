@@ -237,84 +237,139 @@ fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
         Ok(())
     }
 
-    /// Convert two slices and a symbol into a `MathOp`
-    /// Return an user error if needed.
-    fn make_op(line: &mut [MathValue], operator_index: usize) -> Result<(), MathParseErrors> {
-        let (part1, part2_and_op) = line.split_at_mut(operator_index);
-        let operator_offset = u_to_i(operator_index)?;
-        let (op, part2) = part2_and_op.split_at_mut(1);
-        all_but_paren_parse(part1)?;
-        all_but_paren_parse(part2)?;
-        let op = if let Operator(c) = op[0] {
-            c
-        } else {
-            return Err(MathParseInternalBug(format!("{:?} should not have been used in make_op.", op[0])));
-        };
-        let operation = Operation(op, operator_offset, operator_offset+1);
-        let part_1_header = std::mem::replace(&mut line[0], operation);
-        let part_1_header = match part_1_header {
-            ParenOpen(inside_offset) => ParenOpen(inside_offset - operator_offset),
-            Operation(c, offset_1, offset_2) => Operation(c, offset_1 - operator_offset, offset_2 - operator_offset),
-            UnaryOperation(c, offset) => UnaryOperation(c, offset - operator_offset),
-            x => x,
-        };
-        let _ = std::mem::replace(&mut line[operator_index], part_1_header);
-        Ok(())
-    }
+    /// Parse everything that is not parenthesis and unary operators.
+    fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 
-    /// Parse a line of math from left to right, if any operator from the list
-    /// if found, makes a `MathOp` out of it.
-    /// Handles the special cases of 1 or 2 elements in the line.
-    fn parse_op(line: &mut [MathValue], ops: &[char]) -> Result<(), MathParseErrors> {
-        match line.len() {
-            0 => Err(EmptyLine),
-            1 => match line[0] {
-                TrailingError => Err(EmptyLine),
-                _ => Ok(()),
-            },
-            _ => {
-                let mut index = line.len() - 2;
-                while index >= 1 {
-                    match line[index] {
-                        Operator(c) => {
-                            for op in ops {
-                                if c == *op {
-                                    make_op(line, index)?;
-                                    return Ok(());
+        /// Use to represent a slice of the line we are working on. Needed as
+        /// we will cover multiple slices at the same time.
+        #[derive(Clone, Debug)]
+        struct IndexRange {
+            from: usize,
+            to: usize,
+        }
+
+        /// Represent each steps we can encounter while parsing the line.
+        enum ParseSteps {
+            /// We want to solve a range. In it we will find an operator and
+            /// split each sides in `BlockSolving` and the middle in
+            /// `OperatorReading`.
+            BlockSolving(IndexRange),
+
+            /// An operator, with it we only need to move around the operator so
+            /// that it ends up on the front.
+            OperatorReading{range: IndexRange, index: usize},
+        } use ParseSteps::*;
+
+        /// Processes all the tasks in the given stack until it's empty.
+        fn solve_tasks(line: &mut [MathValue], tasks_stack: &mut Vec<ParseSteps>) -> Result<(), MathParseErrors> {
+            while tasks_stack.len() != 0 {
+                match tasks_stack.pop() {
+                    Some(OperatorReading{range, index}) => {
+                        make_op(line, &range, index)?;
+                    },
+                    Some(BlockSolving(range)) => {
+                        solve_block(line, &range, tasks_stack)?;
+                    },
+                    None => {
+                        return Err(MathParseInternalBug(format!("Error, the stack is empty in solve_tasks.")));
+                    },
+                }
+            }
+            Ok(())
+        }
+
+        /// To solve a bloc, search for all operators and process them.
+        fn solve_block(line: &mut [MathValue], range: &IndexRange, tasks_stack: &mut Vec<ParseSteps>) -> Result<(), MathParseErrors> {
+            if parse_op(line, &['|'], range, tasks_stack)? { return Ok(()); }
+            if parse_op(line, &['^'], range, tasks_stack)? { return Ok(()); }
+            if parse_op(line, &['&'], range, tasks_stack)? { return Ok(()); }
+            if parse_op(line, &['≪', '≫', '<', '>'], range, tasks_stack)? { return Ok(()); }
+            if parse_op(line, &['+', '-', '−'], range, tasks_stack)? { return Ok(()); }
+            parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'], range, tasks_stack)?;
+            Ok(())
+        }
+
+        /// Parse a line of math from left to right, if any operator from the
+        /// list if found, calls `make_tasks_from_op` on it.
+        /// Handles the special cases of 1 or 2 elements in the line.
+        fn parse_op(line: &mut [MathValue], ops: &[char], range: &IndexRange, tasks_stack: &mut Vec<ParseSteps>) -> Result<bool, MathParseErrors> {
+            match range.to - range.from {
+                0 => Err(EmptyLine),
+                1 => match line[range.from] {
+                    TrailingError => Err(EmptyLine),
+                    _ => Ok(true),
+                },
+                _ => {
+                    let mut index = range.to - 2;
+                    while index >= range.from+1 {
+                        match line[index] {
+                            Operator(c) => {
+                                for op in ops {
+                                    if c == *op {
+                                        make_tasks_from_op(range, index, tasks_stack);
+                                        return Ok(true);
+                                    }
                                 }
+                                index -= 1;
+                            },
+                            ParenClose(size) => {
+                                index -= size;
+                            },
+                            _ => {
+                                index -= 1;
                             }
-                            index -= 1;
-                        },
-                        ParenClose(size) => {
-                            index -= size;
-                        },
-                        _ => {
-                            index -= 1;
                         }
                     }
-                }
-                Ok(())
-            },
+                    Ok(false)
+                },
+            }
         }
-    }
 
-    /// Parse everything except for parenthesis, which are already parsed
-    /// recursively, and unary, which are parsed in a single pass.
-    fn all_but_paren_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
-        parse_op(line, &['|'])?;
-        parse_op(line, &['^'])?;
-        parse_op(line, &['&'])?;
-        parse_op(line, &['≪', '≫', '<', '>'])?;
-        parse_op(line, &['+', '-', '−'])?;
-        parse_op(line, &['/', '∕', '⁄', '÷', '*', '×', '·', '%', '⟌'])?;
-        Ok(())
+        /// When an operation index, cut the two parts of the equation that need
+        /// solving and add them to the task stack. Also add the operation
+        /// management to it.
+        fn make_tasks_from_op(range: &IndexRange, operator_index: usize, tasks_stack: &mut Vec<ParseSteps>) {
+            let part1 = IndexRange{
+                from: range.from,
+                to: operator_index,
+            };
+            let part2 = IndexRange {
+                from: operator_index+1,
+                to: range.to,
+            };
+            tasks_stack.push(OperatorReading{range: range.clone(), index: operator_index});
+            tasks_stack.push(BlockSolving(part1));
+            tasks_stack.push(BlockSolving(part2));
+        }
+
+        /// To solve a `OperatorReading` task, replace the operator into an
+        /// operation and put it at the front of the range.
+        fn make_op(line: &mut [MathValue], range: &IndexRange, operator_index: usize) -> Result<(), MathParseErrors> {
+            let op = if let Operator(c) = line[operator_index] {
+                c
+            } else {
+                return Err(MathParseInternalBug(format!("{:?} should not have been used in make_op.", line[operator_index])));
+            };
+            let operator_offset = u_to_i(operator_index - range.from)?;
+            let operation = Operation(op, operator_offset, operator_offset+1);
+            let part_1_header = std::mem::replace(&mut line[range.from], operation);
+            let part_1_header = match part_1_header {
+                ParenOpen(inside_offset) => ParenOpen(inside_offset - operator_offset),
+                Operation(c, offset_1, offset_2) => Operation(c, offset_1 - operator_offset, offset_2 - operator_offset),
+                UnaryOperation(c, offset) => UnaryOperation(c, offset - operator_offset),
+                x => x,
+            };
+            let _ = std::mem::replace(&mut line[operator_index], part_1_header);
+            Ok(())
+        }
+
+        let mut tasks_stack = vec![BlockSolving(IndexRange{from:0, to:line.len()})];
+        solve_tasks(line, &mut tasks_stack)
     }
 
     unary_parse(line)?;
     paren_parse(line)?;
     all_but_paren_parse(line)?;
-
-
     Ok(())
 }
 
