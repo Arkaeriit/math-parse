@@ -1,9 +1,9 @@
 /// Module containing the function to parse math expressions.
-mod maths;
+mod solve;
 mod parse;
 mod utils;
 mod rpn;
-use maths::*;
+use solve::*;
 
 use std::collections::HashMap;
 
