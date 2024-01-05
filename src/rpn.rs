@@ -45,6 +45,9 @@ fn rpn_solve<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_ret:
         ParenOpen(offset) => {
             rpn_steps.push(Solve(add_index_offset(index, *offset)?));
         },
+        TrailingError => {
+            return Err(TrailingOperator);
+        },
         x => {
             return Err(MathParseInternalBug(format!("{x:?} should not have been handled by rpn_solve. It should have been replaced earlier.")));
         },

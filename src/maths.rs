@@ -25,6 +25,7 @@ fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number
     }
 }
 
+/// Pop one number from the stack.
 fn pop_one(number_stack: &mut Vec<Number>) -> Result<Number, MathParseErrors> {
     if let Some(num) = number_stack.pop() {
         Ok(num)
@@ -33,6 +34,7 @@ fn pop_one(number_stack: &mut Vec<Number>) -> Result<Number, MathParseErrors> {
     }
 }
 
+/// Pop two numbers from the stack.
 fn pop_two(number_stack: &mut Vec<Number>) -> Result<(Number, Number), MathParseErrors> {
     let num_1 = if let Some(n) = number_stack.pop() {
         n
@@ -52,6 +54,8 @@ enum Unary {
     Minus,
     Plus,
 }
+
+/// Execute the given unary operation on the top element of the stack.
 fn compute_unary(number_stack: &mut Vec<Number>, op: Unary) -> Result<(), MathParseErrors> {
     let num = pop_one(number_stack)?;
     let computed = match op {
@@ -76,6 +80,8 @@ enum Binary {
     Or,
     Xor,
 }
+
+/// Execute the given binary operation on the top two elements of the stack.
 fn compute_binary(number_stack: &mut Vec<Number>, op: Binary) -> Result<(), MathParseErrors> {
     let (num_1, num_2) = pop_two(number_stack)?;
     let computed = match op {
@@ -95,6 +101,7 @@ fn compute_binary(number_stack: &mut Vec<Number>, op: Binary) -> Result<(), Math
     Ok(())
 }
 
+/// Execute a single RPN action and update the stack of numbers accordingly.
 fn exec_rpn_action(number_stack: &mut Vec<Number>, action: &RPN, map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
     match action {
         RPN::Name(x) => {
@@ -361,7 +368,7 @@ impl Number {
 
 /// Takes a string and try to return a number for it.
 fn number_from_string(s: &str) -> Result<Number, MathParseErrors> {
-    let converted = if s.len() > 3 && &s[0..2] == "0x" {
+    let converted = if s.len() >= 3 && &s[0..2] == "0x" {
         i64::from_str_radix(&s[2..], 16)
     } else {
         i64::from_str_radix(&s, 10)
@@ -378,8 +385,8 @@ fn number_from_string(s: &str) -> Result<Number, MathParseErrors> {
 }
 
 /// Convert a float to an integer
+const INTEGRAL_LIMIT: f64 = 9007199254740992.0;
 fn f_to_i(f: f64) -> Result<i64, MathParseErrors> {
-    const INTEGRAL_LIMIT: f64 = 9007199254740992.0;
     if f.is_nan() {
         return Err(IntConversion(f));
     }
@@ -405,7 +412,7 @@ fn i_to_f(i: i64) -> f64 {
 fn test_reading_numbers() {
     assert_eq!(number_from_string("100"),  Ok(Int(100)));
     assert_eq!(number_from_string("0"),    Ok(Int(0)));
-    assert_eq!(number_from_string("10"),   Ok(Int(10)));
+    assert_eq!(number_from_string("0x10"), Ok(Int(0x10)));
     assert_eq!(number_from_string("2.5"),  Ok(Float(2.5)));
     assert_eq!(number_from_string("toto"), Err(InvalidNumber("toto".to_string())));
 }
@@ -432,6 +439,27 @@ fn test_math_final_compute() {
         assert_eq!(computation, (3-5)*4);
     } else {
         panic!("Expected int.");
+    }
+}
+
+#[test]
+fn test_errors() {
+    assert_eq!(Int(10) / Int(0), Err(UnexpectedZero));
+    assert_eq!(Int(10) >> Int(-1), Err(UnexpectedNegative));
+    assert_eq!(!Float(1.3), Err(BinaryOpOnFloat(1.3, '!')));
+    assert_eq!(Float(-5.5).is_negative(), true);
+    assert_eq!(Float(5.5).is_negative(), false);
+
+    let big_float = (INTEGRAL_LIMIT as f64) * 5.0;
+    assert_eq!(Float(big_float).integer_div(Int(10)), Err(IntConversion(big_float)));
+    assert_eq!(Float(-1.0 * big_float).integer_div(Int(10)), Err(IntConversion(big_float * -1.0)));
+    match Float(f64::NAN).integer_div(Int(10)) {
+        Err(IntConversion(x)) => {
+            assert_eq!(x.is_nan(), true);
+        },
+        x => {
+            panic!("Didn't expected {x:?}");
+        },
     }
 }
 

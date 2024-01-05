@@ -165,6 +165,8 @@ fn test_math_compute() {
     compute_int("10.0//3.0", 10/3);
     compute_int("!-4", !-4);
     compute_int("((3+4)*(8+(4-1)))-(43+8//2+1)", ((3+4) * (8+(4-1))) - (43+8/2+1));
+    compute_int("((0xFF&0xF)|0x10)^0x3", ((0xFF & 0xF) | 0x10) ^ 0x3);
+    compute_int("(10<<5)>>(2<<1)", (10 << 5) >> (2 << 1));
 
     compute_float("4×9/4", 4.0*9.0/4.0);
     compute_float("4×9/4.0", 4.0*9.0/4.0);
@@ -178,6 +180,56 @@ fn test_math_compute() {
     compute_float("4.0+9.0-4", 4.0+9.0-4.0);
     compute_float("4+9.0-4", 4.0+9.0-4.0);
     compute_float("4+9.0-4.0", 4.0+9.0-4.0);
+
+    compute_float("4.5%2.1", 4.5 % 2.1);
+    compute_float("8%2.2", 8.0 % 2.2);
+    compute_float("33.4%2", 33.4 % 2.0);
 }
 
+#[test]
+fn test_butchered_rpn() {
+    let mut op = parse::math_token("3++").unwrap();
+    parse::math_parse(&mut op).unwrap();
+    match rpn::parse_rpn(&op) {
+        Ok(x) => {
+            panic!("{x:?} should not have been solved.");
+        },
+        Err(TrailingOperator) => {
+            // Expected result
+        },
+        Err(x) => {
+            panic!("{x:?} is not the expected error.");
+        }
+    }
+}
 
+#[test]
+fn test_api() {
+    assert_eq!(math_parse_int("3+3",     None), Ok(6));
+    assert_eq!(math_parse_int("3.0+3.0", None), Err(ReturnFloatExpectedInt(6.0)));
+
+    assert_eq!(math_parse_float("3+3",     None), Ok(6.0));
+    assert_eq!(math_parse_float("3.0+3.0", None), Ok(6.0));
+
+    assert_eq!(contains_math_char("ab+cd"), true);
+    assert_eq!(contains_math_char("abcd"), false);
+}
+
+#[test]
+fn test_bitwise_on_float() {
+    fn test_operator(op: char) {
+        let exp = format!("3.1{op}4.2");
+        assert_eq!(math_parse_int(&exp, None), Err(BinaryOpOnFloat(3.1, op)));
+    }
+
+    let operators = ['^', '|', '&', '≪', '≫'];
+    for op in &operators {
+        test_operator(*op);
+    }
+}
+
+#[test]
+fn test_operator_hints() {
+    assert_eq!(math_parse_int("3876<4", None), Err(BadOperatorHint('<', "<<")));
+    assert_eq!(math_parse_int("3876>4", None), Err(BadOperatorHint('>', ">>")));
+}
