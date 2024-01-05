@@ -1,166 +1,134 @@
 use std::collections::HashMap;
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
-use crate::utils::*;
 use crate::parse::*;
-use crate::parse::MathValue::*;
+use crate::RPN;
+use crate::rpn::*;
+use crate::RPN::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
-
-/// Take a line of MathValue and replace each value found with a number.
-fn read_numbers(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
-    for i in 0..line.len() {
-        if let Name(name) = &line[i] {
-            line[i] = Value(number_from_string(name)?);
-        }
-    }
-    Ok(())
-}
-
-/// Reads all Names from a line of math and transform any name being a key in
-/// the map to it's value.
+/// Reads a Names and transform any name being a key in the map to it's value.
 /// If map is None, nothing is done.
-fn read_named_variables(line: &mut [MathValue], map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
+fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
     let map = if let Some(m) = map {
         m
     } else {
-        return Ok(());
+        return number_from_string(name);
     };
 
-    for i in 0..line.len() {
-        if let Name(name) = &line[i] {
-            if let Some(new_name) = map.get(&name.to_string()) {
-                let num = math_compute(&new_name, None)?;
-                let _ = std::mem::replace(&mut line[i], Value(num));
-            }
-        }
+    if let Some(new_name) = map.get(&name.to_string()) {
+        let num = math_compute(&new_name, None)?;
+        Ok(num)
+    } else {
+        number_from_string(name)
     }
+}
+
+fn pop_one(number_stack: &mut Vec<Number>) -> Result<Number, MathParseErrors> {
+    if let Some(num) = number_stack.pop() {
+        Ok(num)
+    } else {
+        Err(MathParseInternalBug(format!("Error, unable to pop one, no element on the stack.")))
+    }
+}
+
+fn pop_two(number_stack: &mut Vec<Number>) -> Result<(Number, Number), MathParseErrors> {
+    let num_1 = if let Some(n) = number_stack.pop() {
+        n
+    } else {
+        return Err(MathParseInternalBug(format!("Error, unable to pop two, no element on the stack.")));
+    };
+    let num_2 = if let Some(n) = number_stack.pop() {
+        n
+    } else {
+        return Err(MathParseInternalBug(format!("Error, unable to pop two, only one element on the stack.")));
+    };
+    Ok((num_1, num_2))
+}
+
+enum Unary {
+    Not,
+    Minus,
+    Plus,
+}
+fn compute_unary(number_stack: &mut Vec<Number>, op: Unary) -> Result<(), MathParseErrors> {
+    let num = pop_one(number_stack)?;
+    let computed = match op {
+        Unary::Not => (!num)?,
+        Unary::Minus => Int(-1) * num,
+        Unary::Plus => num,
+    };
+    number_stack.push(computed);
     Ok(())
+}
+
+enum Binary {
+    Mult,
+    Div,
+    IDiv,
+    Rem,
+    Add,
+    Sub,
+    SLe,
+    SRi,
+    And,
+    Or,
+    Xor,
+}
+fn compute_binary(number_stack: &mut Vec<Number>, op: Binary) -> Result<(), MathParseErrors> {
+    let (num_1, num_2) = pop_two(number_stack)?;
+    let computed = match op {
+        Binary::Mult => num_1 * num_2,
+        Binary::Div  => (num_1 / num_2)?,
+        Binary::IDiv => num_1.integer_div(num_2)?,
+        Binary::Rem  => (num_1 % num_2)?,
+        Binary::Add  => num_1 + num_2,
+        Binary::Sub  => num_1 - num_2,
+        Binary::SLe  => (num_1 << num_2)?,
+        Binary::SRi  => (num_1 >> num_2)?,
+        Binary::And  => (num_1 & num_2)?,
+        Binary::Or   => (num_1 | num_2)?,
+        Binary::Xor  => (num_1 ^ num_2)?,
+    };
+    number_stack.push(computed);
+    Ok(())
+}
+
+fn exec_rpn_action(number_stack: &mut Vec<Number>, action: &RPN, map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
+    match action {
+        RPN::Name(x) => {
+            number_stack.push(read_name(x, map)?);
+            Ok(())
+        },
+        UnaryNot => compute_unary(number_stack, Unary::Not),
+        UnaryMinus => compute_unary(number_stack, Unary::Minus),
+        UnaryPlus => compute_unary(number_stack, Unary::Plus),
+        Multiplication => compute_binary(number_stack, Binary::Mult),
+        Division => compute_binary(number_stack, Binary::Div),
+        IntegerDivision => compute_binary(number_stack, Binary::IDiv),
+        Reminder => compute_binary(number_stack, Binary::Rem),
+        Addition => compute_binary(number_stack, Binary::Add),
+        Subtraction => compute_binary(number_stack, Binary::Sub),
+        ShiftLeft => compute_binary(number_stack, Binary::SLe),
+        ShiftRight => compute_binary(number_stack, Binary::SRi),
+        BitwiseAnd => compute_binary(number_stack, Binary::And),
+        BitwiseOr => compute_binary(number_stack, Binary::Or),
+        BitwiseXor => compute_binary(number_stack, Binary::Xor),
+    }
 }
 
 /// Reads a line of math that contains only values, operations, and parenthesis
 /// and returns a computed result.
-fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
+fn math_final_compute(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
 
-    /// Performs the computation and error checking needed to solve
-    /// binary operations.
-    fn compute_operation(op: char, value_1: Number, value_2: Number) -> Result<Number, MathParseErrors> {
-        match op {
-            '*' | '×' | '·'       => Ok(value_1 * value_2),
-            '/' | '∕' | '⁄' | '÷' => Ok((value_1 / value_2)?),
-            '+'                   => Ok(value_1 + value_2),
-            '-' | '−'             => Ok(value_1 - value_2),
-            '%'                   => Ok((value_1 % value_2)?),
-            '⟌'                   => Ok(value_1.integer_div(value_2)?),
-            '|'                   => Ok((value_1 | value_2)?),
-            '&'                   => Ok((value_1 & value_2)?),
-            '^'                   => Ok((value_1 ^ value_2)?),
-            '≪'                   => Ok((value_1 << value_2)?),
-            '≫'                   => Ok((value_1 >> value_2)?),
-            '<'                   => Err(BadOperatorHint('<', "<<")),
-            '>'                   => Err(BadOperatorHint('>', ">>")),
-            x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
-        }
+    let mut number_stack = Vec::<Number>::new();
+
+    for action in rpn_actions {
+        exec_rpn_action(&mut number_stack, action, map)?;
     }
 
-    /// Performs the computation and error checking needed to solve
-    /// unary operations.
-    fn compute_unary(op: char, value: Number) -> Result<Number, MathParseErrors> {
-        match op {
-            '+' => Ok(value),
-            '-' => Ok(Int(-1) * value),
-            '!' => Ok((!value)?),
-            x => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
-        }
-    }
-
-
-    /// This function does most of the work in the computation. The line is a
-    /// tree, but we can't do a naive recursive traversal as we want to process
-    /// input of any size without stack overflow. We thus have to do an
-    /// iterative approach but we use home managed stacks to keep the same logic
-    /// as a recursive approach.
-    fn math_compute_base(line: &[MathValue]) -> Result<Number, MathParseErrors> {
-        let mut operation_stack = Vec::<ProcessedValues>::new();
-        let mut value_stack = Vec::<Number>::new();
-        let mut current_index = 0;
-
-        for _ in 0..line.len() {
-            match &line[current_index] {
-                ParenOpen(offset) => {current_index = add_index_offset(current_index, *offset)?;},
-                UnaryOperation(op, offset) => {
-                    operation_stack.push(Unary(*op));
-                    current_index = add_index_offset(current_index, *offset)?;
-                },
-                Operation(op, offset_1, offset_2) => {
-                    operation_stack.push(BinaryLeft(*op, add_index_offset(current_index, *offset_1)?));
-                    current_index = add_index_offset(current_index, *offset_2)?;
-                },
-                Value(number) => {
-                    current_index = processe_stacks_of_numbers(*number, &mut value_stack, &mut operation_stack)?;
-                    if current_index == !0 {
-                        return if let Some(number) = value_stack.pop() {
-                            Ok(number)
-                        } else {
-                            Err(MathParseInternalBug("If the stack reading function indicated the end of stacks, it should have pushed a number of the value stack.".to_string()))
-                        };
-                    }
-                }
-                TrailingError => {return Err(TrailingOperator);},
-                x => {return Err(MathParseInternalBug(format!("{x:?} should not have been handled by math_compute_base. It should have been replaced earlier.")));},
-            }
-        }
-        Err(MathParseInternalBug("Should not have left the compute_index loop".to_string()))
-    }
-
-    /// One if the stacks used is to keep track of operations encountered. We
-    /// store the operation from the input line of the operation and the index
-    /// of one argument for the branching in binary operations.
-    enum ProcessedValues {
-        Unary(char),
-        BinaryLeft(char, usize),
-        BinaryRight(char),
-    }
-    use ProcessedValues::*;
-
-    /// Once we hit a number, we want to go back in our stacks and apply the
-    /// operations until we empty the stacks or we go to a binary operator that
-    /// need branching.
-    fn processe_stacks_of_numbers(num: Number, value_stack: &mut Vec<Number>, operation_stack: &mut Vec<ProcessedValues>) -> Result<usize, MathParseErrors> {
-        let mut number = num;
-
-        loop { // Not infinite as we know that the stacks are not infinite
-
-            let processed_index = if let Some(processed_index) = operation_stack.pop() {
-                processed_index
-            } else {
-                value_stack.push(number);
-                return Ok(!0); // This special value is used to indicate that there is no computations left to do
-            };
-
-            match processed_index {
-                Unary(op) => {
-                    number = compute_unary(op, number)?;
-                },
-                BinaryRight(op) => {
-                    let other_number = if let Some(other_number) = value_stack.pop() {
-                        other_number
-                    } else {
-                        return Err(MathParseInternalBug("In a binary right, there should have been a value placed on the stack.".to_string()));
-                    };
-                    number = compute_operation(op, number, other_number)?;
-                },
-                BinaryLeft(op, line_offset) => {
-                    operation_stack.push(BinaryRight(op));
-                    value_stack.push(number);
-                    return Ok(line_offset);
-                },
-            }
-        }
-    }
-
-    math_compute_base(line)
+    pop_one(&mut number_stack)
 }
 
 /// Does all the computation from a string with a line of math to the final
@@ -168,9 +136,8 @@ fn math_final_compute(line: &[MathValue]) -> Result<Number, MathParseErrors> {
 pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
     let mut tokens = math_token(s)?;
     math_parse(&mut tokens)?;
-    read_named_variables(&mut tokens, map)?;
-    read_numbers(&mut tokens)?;
-    Ok(math_final_compute(&tokens)?)
+    let rpn = parse_rpn(&tokens)?;
+    math_final_compute(&rpn, map)
 }
 
 /* --------------------------------- Numbers -------------------------------- */
@@ -410,12 +377,6 @@ fn number_from_string(s: &str) -> Result<Number, MathParseErrors> {
     }
 }
 
-/// Takes an index and an offset and return the resulting index
-fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseErrors> {
-    let index_i = u_to_i(index)?;
-    i_to_u(index_i + offset)
-}
-
 /// Convert a float to an integer
 fn f_to_i(f: f64) -> Result<i64, MathParseErrors> {
     const INTEGRAL_LIMIT: f64 = 9007199254740992.0;
@@ -442,16 +403,11 @@ fn i_to_f(i: i64) -> f64 {
 
 #[test]
 fn test_reading_numbers() {
-    let math_line = "100*0x10-2.5";
-    let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
-    read_numbers(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('-', 3, 4), Value(Int(100)), Value(Int(0x10)), Operation('*', -2, -1), Value(Float(2.5)), TrailingError]);
-
-    let math_line = "toto-0x10";
-    let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
-    assert_eq!(read_numbers(&mut tokens), Err(InvalidNumber("toto".to_string())));
+    assert_eq!(number_from_string("100"),  Ok(Int(100)));
+    assert_eq!(number_from_string("0"),    Ok(Int(0)));
+    assert_eq!(number_from_string("10"),   Ok(Int(10)));
+    assert_eq!(number_from_string("2.5"),  Ok(Float(2.5)));
+    assert_eq!(number_from_string("toto"), Err(InvalidNumber("toto".to_string())));
 }
 
 #[test]
@@ -462,81 +418,20 @@ fn test_read_named_variables() {
         ("indirect_2".to_string(), "indirect_3".to_string()),
         ("indirect_1".to_string(), "indirect_2".to_string()),
     ]);
-    let mut tokens = vec![Name("3"), Name("direct_1")];
-    read_named_variables(&mut tokens, Some(&variables)).unwrap();
-    assert_eq!(tokens, vec![Name("3"), Value(Float(1.0))]);
-    let mut tokens = vec![Name("3"), Name("indirect_1"), Name("direct_1")];
-    assert_eq!(read_named_variables(&mut tokens, Some(&variables)), Err(InvalidNumber("indirect_2".to_string())));
+    assert_eq!(read_name("3",          Some(&variables)), Ok(Int(3)));
+    assert_eq!(read_name("direct_1",   Some(&variables)), Ok(Float(1.0)));
+    assert_eq!(read_name("indirect_1", Some(&variables)), Err(InvalidNumber("indirect_2".to_string())));
+    assert_eq!(read_name("direct_1",   None),             Err(InvalidNumber("direct_1".to_string())));
 }
 
 #[test]
 fn test_math_final_compute() {
-    let mut tokens = math_token("(3-5)*4").unwrap();
-    math_parse(&mut tokens).unwrap();
-    read_numbers(&mut tokens).unwrap();
-    let computation = math_final_compute(&tokens).unwrap();
+    let rpn_actions = [RPN::Name("4"), RPN::Name("5"), RPN::Name("3"), Subtraction, Multiplication];
+    let computation = math_final_compute(&rpn_actions, None).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);
     } else {
         panic!("Expected int.");
     }
-
-    let mut tokens = math_token("3++").unwrap();
-    math_parse(&mut tokens).unwrap();
-    read_numbers(&mut tokens).unwrap();
-    let computation = math_final_compute(&tokens);
-    assert_eq!(computation, Err(TrailingOperator));
-}
-
-#[test]
-fn test_math_compute() {
-    let a = 3;
-    let b = 9;
-    let c = 3*5;
-    let variables = HashMap::from([
-        ("a".to_string(), "3".to_string()),
-        ("b".to_string(), "9".to_string()),
-        ("c".to_string(), "(((3)*(5)))".to_string()),
-    ]);
-    
-    let compute_int = |input: &str, output: i64| {
-        let res = math_compute(input, Some(&variables)).unwrap();
-        if let Int(res) = res {
-            assert_eq!(res, output);
-        } else {
-            panic!("Expected integer instead of float.");
-        }
-    };
-
-    fn compute_float (input: &str, output: f64) {
-        let res = math_compute(input, None).unwrap();
-        if let Float(res) = res {
-            assert_eq!(res, output);
-        } else {
-            panic!("Expected float instead of integer.");
-        }
-    }
-    
-    compute_int("((3+3)·b+8)*(a-1)", ((3+3)*b+8)*(a-1));
-    compute_int("0", 0);
-    compute_int("-a+b−c", -a+b-c);
-    compute_int("-−-+++-a", ----a);
-    compute_int("3%8+99", 3%8+99);
-    compute_int("10.0//3.0", 10/3);
-    compute_int("!-4", !-4);
-    compute_int("((3+4)*(8+(4-1)))-(43+8//2+1)", ((3+4) * (8+(4-1))) - (43+8/2+1));
-
-    compute_float("4×9/4", 4.0*9.0/4.0);
-    compute_float("4×9/4.0", 4.0*9.0/4.0);
-    compute_float("4.0*9/4", 4.0*9.0/4.0);
-    compute_float("4.0·9.0/4", 4.0*9.0/4.0);
-    compute_float("4*9.0/4", 4.0*9.0/4.0);
-    compute_float("4*9.0/4.0", 4.0*9.0/4.0);
-    compute_float("4.0+9-4", 4.0+9.0-4.0);
-    compute_float("4+9-4.0", 4.0+9.0-4.0);
-    compute_float("4.0+9-4", 4.0+9.0-4.0);
-    compute_float("4.0+9.0-4", 4.0+9.0-4.0);
-    compute_float("4+9.0-4", 4.0+9.0-4.0);
-    compute_float("4+9.0-4.0", 4.0+9.0-4.0);
 }
 

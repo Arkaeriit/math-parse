@@ -14,8 +14,6 @@ pub enum MathValue<'a> {
     Operator(char),
 
     // Values used in solving
-    /// A solved value.
-    Value(crate::maths::Number),
     /// A math operation. The character is the operator used and the two `isize`
     /// are the offsets from the Operation to its two members.
     Operation(char, isize, isize),

@@ -126,3 +126,58 @@ pub enum RPN<'a> {
     BitwiseXor,
 }
 
+/* --------------------------------- Testing -------------------------------- */
+
+#[test]
+fn test_math_compute() {
+    let a = 3;
+    let b = 9;
+    let c = 3*5;
+    let variables = HashMap::from([
+        ("a".to_string(), "3".to_string()),
+        ("b".to_string(), "9".to_string()),
+        ("c".to_string(), "(((3)*(5)))".to_string()),
+    ]);
+    
+    let compute_int = |input: &str, output: i64| {
+        let res = math_compute(input, Some(&variables)).unwrap();
+        if let Number::Int(res) = res {
+            assert_eq!(res, output);
+        } else {
+            panic!("Expected integer instead of float.");
+        }
+    };
+
+    fn compute_float (input: &str, output: f64) {
+        let res = math_compute(input, None).unwrap();
+        if let Number::Float(res) = res {
+            assert_eq!(res, output);
+        } else {
+            panic!("Expected float instead of integer.");
+        }
+    }
+    
+    compute_int("((3+3)·b+8)*(a-1)", ((3+3)*b+8)*(a-1));
+    compute_int("0", 0);
+    compute_int("-a+b−c", -a+b-c);
+    compute_int("-−-+++-a", ----a);
+    compute_int("3%8+99", 3%8+99);
+    compute_int("10.0//3.0", 10/3);
+    compute_int("!-4", !-4);
+    compute_int("((3+4)*(8+(4-1)))-(43+8//2+1)", ((3+4) * (8+(4-1))) - (43+8/2+1));
+
+    compute_float("4×9/4", 4.0*9.0/4.0);
+    compute_float("4×9/4.0", 4.0*9.0/4.0);
+    compute_float("4.0*9/4", 4.0*9.0/4.0);
+    compute_float("4.0·9.0/4", 4.0*9.0/4.0);
+    compute_float("4*9.0/4", 4.0*9.0/4.0);
+    compute_float("4*9.0/4.0", 4.0*9.0/4.0);
+    compute_float("4.0+9-4", 4.0+9.0-4.0);
+    compute_float("4+9-4.0", 4.0+9.0-4.0);
+    compute_float("4.0+9-4", 4.0+9.0-4.0);
+    compute_float("4.0+9.0-4", 4.0+9.0-4.0);
+    compute_float("4+9.0-4", 4.0+9.0-4.0);
+    compute_float("4+9.0-4.0", 4.0+9.0-4.0);
+}
+
+

@@ -11,7 +11,7 @@ enum RPNSteps {
     OperatorStep(usize),
 } use RPNSteps::*;
 
-pub fn parse_rpm<'a>(line: &[MathValue<'a>]) -> Result<Vec<RPN<'a>>, MathParseErrors> {
+pub fn parse_rpn<'a>(line: &[MathValue<'a>]) -> Result<Vec<RPN<'a>>, MathParseErrors> {
     let mut rpn_steps = vec![Solve(0)];
     let mut ret = Vec::<RPN>::new();
     while rpn_steps.len() != 0 {
