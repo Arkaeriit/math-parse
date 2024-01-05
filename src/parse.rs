@@ -37,7 +37,7 @@ pub enum MathValue<'a> {
 use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
-pub fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
+fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
 
     /// Reads name and operators in a line of math.
     fn token_base<'a>(s: &'a str) -> Vec<MathValue<'a>> {
@@ -137,7 +137,7 @@ pub fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors>
 //   |  ·---------------./   |   
 //   ·-----------------------/   
 //                               
-pub fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
+fn math_parse_tokens(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 
     /// Parse unary operators this must be done before any other steps of the
     /// parsing as the next steps will move around the elements used to
@@ -369,6 +369,14 @@ pub fn math_parse(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
     Ok(())
 }
 
+/// Tokenize and then parse a math expression.
+pub fn math_parse<'a>(expression: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
+    let mut tokens = math_token(expression)?;
+    math_parse_tokens(&mut tokens)?;
+    Ok(tokens)
+}
+
+
 /* ---------------------------------- Utils --------------------------------- */
 
 /// Return true if the element is in the slice
@@ -398,17 +406,17 @@ fn test_math_token() {
 fn test_math_parse() {
     let math_line = "+88+89";
     let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
+    math_parse_tokens(&mut tokens).unwrap();
     assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89"), TrailingError]);
 
     let math_line = "-1*2+-3*4";
     let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
+    math_parse_tokens(&mut tokens).unwrap();
     assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4"), TrailingError]);
 
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
+    math_parse_tokens(&mut tokens).unwrap();
     assert_eq!(tokens, vec![
                Operation('*', 5, 6),
                Operation('+', 1, 2),
@@ -423,13 +431,13 @@ fn test_math_parse() {
                ParenClose(3),
                TrailingError]);
 
-    assert_eq!(math_parse(&mut math_token("33)").unwrap()), Err(UnopenedParenthesis));
-    assert_eq!(math_parse(&mut math_token("((33)").unwrap()), Err(UnclosedParenthesis));
-    assert_eq!(math_parse(&mut math_token("").unwrap()), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("22+()").unwrap()), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("33+*23").unwrap()), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("*2").unwrap()), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("2/").unwrap()), Err(EmptyLine));
+    assert_eq!(math_parse_tokens(&mut math_token("33)").unwrap()), Err(UnopenedParenthesis));
+    assert_eq!(math_parse_tokens(&mut math_token("((33)").unwrap()), Err(UnclosedParenthesis));
+    assert_eq!(math_parse_tokens(&mut math_token("").unwrap()), Err(EmptyLine));
+    assert_eq!(math_parse_tokens(&mut math_token("22+()").unwrap()), Err(EmptyLine));
+    assert_eq!(math_parse_tokens(&mut math_token("33+*23").unwrap()), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse_tokens(&mut math_token("*2").unwrap()), Err(MisplacedOperator('*')));
+    assert_eq!(math_parse_tokens(&mut math_token("2/").unwrap()), Err(EmptyLine));
 }
 
 

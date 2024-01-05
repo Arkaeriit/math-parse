@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
-use crate::parse::*;
 use crate::RPN;
-use crate::rpn::*;
 use crate::RPN::*;
 
 /* ---------------------------------- Maths --------------------------------- */
@@ -18,7 +16,7 @@ fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number
     };
 
     if let Some(new_name) = map.get(&name.to_string()) {
-        let num = math_compute(&new_name, None)?;
+        let num = crate::compute(&new_name, None)?;
         Ok(num)
     } else {
         number_from_string(name)
@@ -127,7 +125,7 @@ fn exec_rpn_action(number_stack: &mut Vec<Number>, action: &RPN, map: Option<&Ha
 
 /// Reads a line of math that contains only values, operations, and parenthesis
 /// and returns a computed result.
-fn math_final_compute(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
+pub fn math_solve(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
 
     let mut number_stack = Vec::<Number>::new();
 
@@ -136,15 +134,6 @@ fn math_final_compute(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>
     }
 
     pop_one(&mut number_stack)
-}
-
-/// Does all the computation from a string with a line of math to the final
-/// resulting number.
-pub fn math_compute(s: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
-    let mut tokens = math_token(s)?;
-    math_parse(&mut tokens)?;
-    let rpn = parse_rpn(&tokens)?;
-    math_final_compute(&rpn, map)
 }
 
 /* --------------------------------- Numbers -------------------------------- */
@@ -432,9 +421,9 @@ fn test_read_named_variables() {
 }
 
 #[test]
-fn test_math_final_compute() {
+fn test_math_compute() {
     let rpn_actions = [RPN::Name("4"), RPN::Name("5"), RPN::Name("3"), Subtraction, Multiplication];
-    let computation = math_final_compute(&rpn_actions, None).unwrap();
+    let computation = math_solve(&rpn_actions, None).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);
     } else {

@@ -5,7 +5,7 @@ extern crate math_parse;
 fn main() {
     let args = concat_cli_arg();
 
-    match math_parse::math_parse_int(&args, None) {
+    match math_parse::math_solve_int(&args, None) {
         Ok(i) => {
             println!("{i}");
             std::process::exit(0);
@@ -19,7 +19,7 @@ fn main() {
         },
     }
 
-    match math_parse::math_parse_float(&args, None) {
+    match math_parse::math_solve_float(&args, None) {
         Ok(f) => {
             println!("{f}");
             std::process::exit(0);

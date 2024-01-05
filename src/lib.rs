@@ -3,15 +3,25 @@ mod solve;
 mod parse;
 mod utils;
 mod rpn;
-use solve::*;
 
+use solve::*;
+use parse::math_parse;
 use std::collections::HashMap;
+
+/* --------------------------------- Solving -------------------------------- */
+
+/// Does all the computation from a string with a line of math to the final
+/// resulting number.
+fn compute(expression: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
+    let rpn = parse_rpn(expression)?;
+    math_solve(&rpn, map)
+}
 
 /// Parse the expression given and apply the optional map of variable that maps
 /// variables to math expressions. Return an integer or error out if the result
 /// is a floating point number.
-pub fn math_parse_int(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
-    match math_compute(expression, variable_map)? {
+pub fn math_solve_int(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
+    match compute(expression, variable_map)? {
         Number::Int(i)   => Ok(i),
         Number::Float(f) => Err(ReturnFloatExpectedInt(f)),
     }
@@ -20,12 +30,14 @@ pub fn math_parse_int(expression: &str, variable_map: Option<&HashMap<String, St
 /// Parse the expression given and apply the optional map of variable that maps
 /// variables to math expressions. Return a floating point number. If the result
 /// is an integer, convert it as a floating point number.
-pub fn math_parse_float(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<f64, MathParseErrors> {
-    match math_compute(expression, variable_map)? {
+pub fn math_solve_float(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<f64, MathParseErrors> {
+    match compute(expression, variable_map)? {
         Number::Float(f) => Ok(f),
         Number::Int(i)   => Ok(i as f64),
     }
 }
+
+/* ---------------------------------- Misc. --------------------------------- */
 
 /// Return true if the given string contains any character that are used as
 /// operators inside of math-parse
@@ -107,7 +119,9 @@ impl fmt::Display for MathParseErrors {
 
 /* ----------------------------------- RPN ---------------------------------- */
 
-#[derive(Debug)]
+/// Elements that make a list of RPN instruction extracted from a math
+/// expression.
+#[derive(Debug, PartialEq)]
 pub enum RPN<'a> {
     Name(&'a str),
     UnaryNot,
@@ -126,6 +140,12 @@ pub enum RPN<'a> {
     BitwiseXor,
 }
 
+/// Parse a math expression into a RPN list of instructions.
+pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseErrors> {
+    let parsed = math_parse(expression)?;
+    rpn::parse_rpn(&parsed)
+}
+
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]
@@ -140,7 +160,7 @@ fn test_math_compute() {
     ]);
     
     let compute_int = |input: &str, output: i64| {
-        let res = math_compute(input, Some(&variables)).unwrap();
+        let res = compute(input, Some(&variables)).unwrap();
         if let Number::Int(res) = res {
             assert_eq!(res, output);
         } else {
@@ -149,7 +169,7 @@ fn test_math_compute() {
     };
 
     fn compute_float (input: &str, output: f64) {
-        let res = math_compute(input, None).unwrap();
+        let res = compute(input, None).unwrap();
         if let Number::Float(res) = res {
             assert_eq!(res, output);
         } else {
@@ -188,9 +208,7 @@ fn test_math_compute() {
 
 #[test]
 fn test_butchered_rpn() {
-    let mut op = parse::math_token("3++").unwrap();
-    parse::math_parse(&mut op).unwrap();
-    match rpn::parse_rpn(&op) {
+    match parse_rpn("3++") {
         Ok(x) => {
             panic!("{x:?} should not have been solved.");
         },
@@ -205,11 +223,11 @@ fn test_butchered_rpn() {
 
 #[test]
 fn test_api() {
-    assert_eq!(math_parse_int("3+3",     None), Ok(6));
-    assert_eq!(math_parse_int("3.0+3.0", None), Err(ReturnFloatExpectedInt(6.0)));
+    assert_eq!(math_solve_int("3+3",     None), Ok(6));
+    assert_eq!(math_solve_int("3.0+3.0", None), Err(ReturnFloatExpectedInt(6.0)));
 
-    assert_eq!(math_parse_float("3+3",     None), Ok(6.0));
-    assert_eq!(math_parse_float("3.0+3.0", None), Ok(6.0));
+    assert_eq!(math_solve_float("3+3",     None), Ok(6.0));
+    assert_eq!(math_solve_float("3.0+3.0", None), Ok(6.0));
 
     assert_eq!(contains_math_char("ab+cd"), true);
     assert_eq!(contains_math_char("abcd"), false);
@@ -219,7 +237,7 @@ fn test_api() {
 fn test_bitwise_on_float() {
     fn test_operator(op: char) {
         let exp = format!("3.1{op}4.2");
-        assert_eq!(math_parse_int(&exp, None), Err(BinaryOpOnFloat(3.1, op)));
+        assert_eq!(math_solve_int(&exp, None), Err(BinaryOpOnFloat(3.1, op)));
     }
 
     let operators = ['^', '|', '&', '≪', '≫'];
@@ -230,6 +248,13 @@ fn test_bitwise_on_float() {
 
 #[test]
 fn test_operator_hints() {
-    assert_eq!(math_parse_int("3876<4", None), Err(BadOperatorHint('<', "<<")));
-    assert_eq!(math_parse_int("3876>4", None), Err(BadOperatorHint('>', ">>")));
+    assert_eq!(math_solve_int("3876<4", None), Err(BadOperatorHint('<', "<<")));
+    assert_eq!(math_solve_int("3876>4", None), Err(BadOperatorHint('>', ">>")));
 }
+
+#[test]
+fn test_rpn() {
+    assert_eq!(parse_rpn("8/2").unwrap(), vec![RPN::Name("2"), RPN::Name("8"), RPN::Division]);
+    assert_eq!(parse_rpn("-3+4").unwrap(), vec![RPN::Name("4"), RPN::Name("3"), RPN::UnaryMinus, RPN::Addition]);
+}
+
