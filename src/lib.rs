@@ -2,6 +2,7 @@
 mod maths;
 mod parse;
 mod utils;
+mod rpn;
 use maths::*;
 
 use std::collections::HashMap;
@@ -102,5 +103,26 @@ impl fmt::Display for MathParseErrors {
             MathParseInternalBug(s) => write!(f, "There is a bug in the math-parse library. The error message is the following:\n{s}\nPlease, report it with the input given to the library to the developer of math-parse over here: https://github.com/Arkaeriit/math-parse"),
         }
     }
+}
+
+/* ----------------------------------- RPN ---------------------------------- */
+
+#[derive(Debug)]
+pub enum RPN<'a> {
+    Name(&'a str),
+    UnaryNot,
+    UnaryMinus,
+    UnaryPlus,
+    Multiplication,
+    Division,
+    IntegerDivision,
+    Reminder,
+    Addition,
+    Subtraction,
+    ShiftLeft,
+    ShiftRight,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
 }
 

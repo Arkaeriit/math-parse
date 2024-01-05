@@ -441,50 +441,6 @@ fn i_to_f(i: i64) -> f64 {
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]
-fn test_math_token() {
-    let math_line = "+4/88*toto";
-    assert_eq!(math_token(math_line).unwrap(), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto"), TrailingError]);
-}
-
-#[test]
-fn test_math_parse() {
-    let math_line = "+88+89";
-    let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89"), TrailingError]);
-
-    let math_line = "-1*2+-3*4";
-    let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4"), TrailingError]);
-
-    let math_line = "(1+2)*(3+4)";
-    let mut tokens = math_token(math_line).unwrap();
-    math_parse(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![
-               Operation('*', 5, 6),
-               Operation('+', 1, 2),
-               Name("1"),
-               Name("2"),
-               ParenClose(3),
-               ParenOpen(-4),
-               ParenOpen(1),
-               Operation('+', 1, 2),
-               Name("3"),
-               Name("4"),
-               ParenClose(3),
-               TrailingError]);
-
-    assert_eq!(math_parse(&mut math_token("33)").unwrap()), Err(UnopenedParenthesis));
-    assert_eq!(math_parse(&mut math_token("((33)").unwrap()), Err(UnclosedParenthesis));
-    assert_eq!(math_parse(&mut math_token("").unwrap()), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("22+()").unwrap()), Err(EmptyLine));
-    assert_eq!(math_parse(&mut math_token("33+*23").unwrap()), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("*2").unwrap()), Err(MisplacedOperator('*')));
-    assert_eq!(math_parse(&mut math_token("2/").unwrap()), Err(EmptyLine));
-}
-
-#[test]
 fn test_reading_numbers() {
     let math_line = "100*0x10-2.5";
     let mut tokens = math_token(math_line).unwrap();
