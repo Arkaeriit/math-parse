@@ -1,5 +1,7 @@
 /// Module containing the function to parse math expressions.
 mod maths;
+mod parse;
+mod utils;
 use maths::*;
 
 use std::collections::HashMap;
@@ -27,7 +29,7 @@ pub fn math_parse_float(expression: &str, variable_map: Option<&HashMap<String, 
 /// Return true if the given string contains any character that are used as
 /// operators inside of math-parse
 pub fn contains_math_char(s: &str) -> bool {
-    maths::contains_math_char(s)
+    parse::contains_math_char(s)
 }
 
 /* --------------------------------- Errors --------------------------------- */
