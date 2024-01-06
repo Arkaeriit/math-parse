@@ -35,8 +35,8 @@ fn rpn_solve<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_ret:
         },
         Operation(_char, offset_1, offset_2) => {
             rpn_steps.push(OperatorStep(index));
-            rpn_steps.push(Solve(add_index_offset(index, *offset_1)?));
             rpn_steps.push(Solve(add_index_offset(index, *offset_2)?));
+            rpn_steps.push(Solve(add_index_offset(index, *offset_1)?));
         },
         UnaryOperation(_char, offset) => {
             rpn_steps.push(OperatorStep(index));

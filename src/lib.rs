@@ -140,7 +140,17 @@ pub enum RPN<'a> {
     BitwiseXor,
 }
 
-/// Parse a math expression into a RPN list of instructions.
+/// Parse a math expression into list of instructions in Reverse Polish
+/// notation.
+///
+/// Example:
+/// ```
+/// use math_parse::RPN::*;
+///
+/// assert_eq!(
+///     math_parse::parse_rpn("3-4+(-5)"),
+///     Ok(vec![Name("3"), Name("4"), Subtraction, Name("5"), UnaryMinus, Addition]));
+/// ```
 pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseErrors> {
     let parsed = math_parse(expression)?;
     rpn::parse_rpn(&parsed)
@@ -254,7 +264,7 @@ fn test_operator_hints() {
 
 #[test]
 fn test_rpn() {
-    assert_eq!(parse_rpn("8/2").unwrap(), vec![RPN::Name("2"), RPN::Name("8"), RPN::Division]);
-    assert_eq!(parse_rpn("-3+4").unwrap(), vec![RPN::Name("4"), RPN::Name("3"), RPN::UnaryMinus, RPN::Addition]);
+    assert_eq!(parse_rpn("8/2").unwrap(), vec![RPN::Name("8"), RPN::Name("2"), RPN::Division]);
+    assert_eq!(parse_rpn("-3+4").unwrap(), vec![RPN::Name("3"), RPN::UnaryMinus, RPN::Name("4"), RPN::Addition]);
 }
 

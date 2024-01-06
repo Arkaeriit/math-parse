@@ -44,7 +44,7 @@ fn pop_two(number_stack: &mut Vec<Number>) -> Result<(Number, Number), MathParse
     } else {
         return Err(MathParseInternalBug(format!("Error, unable to pop two, only one element on the stack.")));
     };
-    Ok((num_1, num_2))
+    Ok((num_2, num_1))
 }
 
 enum Unary {
@@ -422,7 +422,7 @@ fn test_read_named_variables() {
 
 #[test]
 fn test_math_compute() {
-    let rpn_actions = [RPN::Name("4"), RPN::Name("5"), RPN::Name("3"), Subtraction, Multiplication];
+    let rpn_actions = [RPN::Name("4"), RPN::Name("3"), RPN::Name("5"), Subtraction, Multiplication];
     let computation = math_solve(&rpn_actions, None).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);
