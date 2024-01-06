@@ -117,16 +117,19 @@ impl fmt::Display for MathParseErrors {
     }
 }
 
-/* ----------------------------------- RPN ---------------------------------- */
+/* ------------------------------- Operations ------------------------------- */
 
-/// Elements that make a list of RPN instruction extracted from a math
-/// expression.
-#[derive(Debug, PartialEq)]
-pub enum RPN<'a> {
-    Name(&'a str),
-    UnaryNot,
-    UnaryMinus,
-    UnaryPlus,
+/// Available unary operations.
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum UnaryOp {
+    Not,
+    Minus,
+    Plus
+}
+
+/// Available binary operations.
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum BinaryOp {
     Multiplication,
     Division,
     IntegerDivision,
@@ -140,16 +143,29 @@ pub enum RPN<'a> {
     BitwiseXor,
 }
 
+/* ----------------------------------- RPN ---------------------------------- */
+
+/// Elements that make a list of RPN instruction extracted from a math
+/// expression.
+#[derive(Debug, PartialEq)]
+pub enum RPN<'a> {
+    Name(&'a str),
+    Unary(UnaryOp),
+    Binary(BinaryOp),
+}
+
 /// Parse a math expression into list of instructions in Reverse Polish
-/// notation.
+/// notation (postfix notation).
 ///
 /// Example:
 /// ```
 /// use math_parse::RPN::*;
+/// use math_parse::UnaryOp::*;
+/// use math_parse::BinaryOp::*;
 ///
 /// assert_eq!(
 ///     math_parse::parse_rpn("3-4+(-5)"),
-///     Ok(vec![Name("3"), Name("4"), Subtraction, Name("5"), UnaryMinus, Addition]));
+///     Ok(vec![Name("3"), Name("4"), Binary(Subtraction), Name("5"), Unary(Minus), Binary(Addition)]));
 /// ```
 pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseErrors> {
     let parsed = math_parse(expression)?;
@@ -264,7 +280,10 @@ fn test_operator_hints() {
 
 #[test]
 fn test_rpn() {
-    assert_eq!(parse_rpn("8/2").unwrap(), vec![RPN::Name("8"), RPN::Name("2"), RPN::Division]);
-    assert_eq!(parse_rpn("-3+4").unwrap(), vec![RPN::Name("3"), RPN::UnaryMinus, RPN::Name("4"), RPN::Addition]);
+    use RPN::*;
+    use UnaryOp::*;
+    use BinaryOp::*;
+    assert_eq!(parse_rpn("8/2").unwrap(), vec![Name("8"), Name("2"), Binary(Division)]);
+    assert_eq!(parse_rpn("-3+4").unwrap(), vec![Name("3"), Unary(Minus), Name("4"), Binary(Addition)]);
 }
 

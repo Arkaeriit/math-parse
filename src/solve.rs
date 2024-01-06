@@ -3,6 +3,10 @@ use crate::MathParseErrors;
 use crate::MathParseErrors::*;
 use crate::RPN;
 use crate::RPN::*;
+use crate::BinaryOp;
+use crate::UnaryOp;
+use crate::BinaryOp::*;
+use crate::UnaryOp::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
@@ -47,53 +51,33 @@ fn pop_two(number_stack: &mut Vec<Number>) -> Result<(Number, Number), MathParse
     Ok((num_2, num_1))
 }
 
-enum Unary {
-    Not,
-    Minus,
-    Plus,
-}
-
 /// Execute the given unary operation on the top element of the stack.
-fn compute_unary(number_stack: &mut Vec<Number>, op: Unary) -> Result<(), MathParseErrors> {
+fn compute_unary(number_stack: &mut Vec<Number>, op: UnaryOp) -> Result<(), MathParseErrors> {
     let num = pop_one(number_stack)?;
     let computed = match op {
-        Unary::Not => (!num)?,
-        Unary::Minus => Int(-1) * num,
-        Unary::Plus => num,
+        UnaryOp::Not => (!num)?,
+        Minus        => Int(-1) * num,
+        Plus         => num,
     };
     number_stack.push(computed);
     Ok(())
 }
 
-enum Binary {
-    Mult,
-    Div,
-    IDiv,
-    Rem,
-    Add,
-    Sub,
-    SLe,
-    SRi,
-    And,
-    Or,
-    Xor,
-}
-
 /// Execute the given binary operation on the top two elements of the stack.
-fn compute_binary(number_stack: &mut Vec<Number>, op: Binary) -> Result<(), MathParseErrors> {
+fn compute_binary(number_stack: &mut Vec<Number>, op: BinaryOp) -> Result<(), MathParseErrors> {
     let (num_1, num_2) = pop_two(number_stack)?;
     let computed = match op {
-        Binary::Mult => num_1 * num_2,
-        Binary::Div  => (num_1 / num_2)?,
-        Binary::IDiv => num_1.integer_div(num_2)?,
-        Binary::Rem  => (num_1 % num_2)?,
-        Binary::Add  => num_1 + num_2,
-        Binary::Sub  => num_1 - num_2,
-        Binary::SLe  => (num_1 << num_2)?,
-        Binary::SRi  => (num_1 >> num_2)?,
-        Binary::And  => (num_1 & num_2)?,
-        Binary::Or   => (num_1 | num_2)?,
-        Binary::Xor  => (num_1 ^ num_2)?,
+        Multiplication  => num_1 * num_2,
+        Division        => (num_1 / num_2)?,
+        IntegerDivision => num_1.integer_div(num_2)?,
+        Reminder        => (num_1 % num_2)?,
+        Addition        => num_1 + num_2,
+        Subtraction     => num_1 - num_2,
+        ShiftLeft       => (num_1 << num_2)?,
+        ShiftRight      => (num_1 >> num_2)?,
+        BitwiseAnd      => (num_1 & num_2)?,
+        BitwiseOr       => (num_1 | num_2)?,
+        BitwiseXor      => (num_1 ^ num_2)?,
     };
     number_stack.push(computed);
     Ok(())
@@ -106,20 +90,8 @@ fn exec_rpn_action(number_stack: &mut Vec<Number>, action: &RPN, map: Option<&Ha
             number_stack.push(read_name(x, map)?);
             Ok(())
         },
-        UnaryNot => compute_unary(number_stack, Unary::Not),
-        UnaryMinus => compute_unary(number_stack, Unary::Minus),
-        UnaryPlus => compute_unary(number_stack, Unary::Plus),
-        Multiplication => compute_binary(number_stack, Binary::Mult),
-        Division => compute_binary(number_stack, Binary::Div),
-        IntegerDivision => compute_binary(number_stack, Binary::IDiv),
-        Reminder => compute_binary(number_stack, Binary::Rem),
-        Addition => compute_binary(number_stack, Binary::Add),
-        Subtraction => compute_binary(number_stack, Binary::Sub),
-        ShiftLeft => compute_binary(number_stack, Binary::SLe),
-        ShiftRight => compute_binary(number_stack, Binary::SRi),
-        BitwiseAnd => compute_binary(number_stack, Binary::And),
-        BitwiseOr => compute_binary(number_stack, Binary::Or),
-        BitwiseXor => compute_binary(number_stack, Binary::Xor),
+        Unary(op) => compute_unary(number_stack, *op),
+        Binary(op) => compute_binary(number_stack, *op),
     }
 }
 
@@ -217,7 +189,7 @@ impl Rem for Number {
     }
 }
 
-impl Not for Number {
+impl std::ops::Not for Number {
     type Output = Result<Number, MathParseErrors>;
     
     fn not(self) -> Result<Number, MathParseErrors> {
@@ -422,7 +394,7 @@ fn test_read_named_variables() {
 
 #[test]
 fn test_math_compute() {
-    let rpn_actions = [RPN::Name("4"), RPN::Name("3"), RPN::Name("5"), Subtraction, Multiplication];
+    let rpn_actions = [Name("4"), Name("3"), Name("5"), Binary(Subtraction), Binary(Multiplication)];
     let computation = math_solve(&rpn_actions, None).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);

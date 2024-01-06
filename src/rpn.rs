@@ -5,6 +5,8 @@ use crate::parse::*;
 use crate::parse::MathValue::*;
 use crate::RPN;
 use crate::RPN::*;
+use crate::BinaryOp::*;
+use crate::UnaryOp::*;
 
 enum RPNSteps {
     Solve(usize),
@@ -64,25 +66,25 @@ fn rpn_operator<'a>(line: &[MathValue<'a>], rpn_ret: &mut Vec<RPN<'a>>, index: u
 fn read_operator<'a>(line: &[MathValue<'a>], index: usize) -> Result<RPN<'a>, MathParseErrors> {
     match &line[index] {
         Operation(x, _offset_1, _offset_2) => match x {
-            '*' | '×' | '·'       => Ok(Multiplication),
-            '/' | '∕' | '⁄' | '÷' => Ok(Division),
-            '+'                   => Ok(Addition),
-            '-' | '−'             => Ok(Subtraction),
-            '%'                   => Ok(Reminder),
-            '⟌'                   => Ok(IntegerDivision),
-            '|'                   => Ok(BitwiseOr),
-            '&'                   => Ok(BitwiseAnd),
-            '^'                   => Ok(BitwiseXor),
-            '≪'                   => Ok(ShiftLeft),
-            '≫'                   => Ok(ShiftRight),
+            '*' | '×' | '·'       => Ok(Binary(Multiplication)),
+            '/' | '∕' | '⁄' | '÷' => Ok(Binary(Division)),
+            '+'                   => Ok(Binary(Addition)),
+            '-' | '−'             => Ok(Binary(Subtraction)),
+            '%'                   => Ok(Binary(Reminder)),
+            '⟌'                   => Ok(Binary(IntegerDivision)),
+            '|'                   => Ok(Binary(BitwiseOr)),
+            '&'                   => Ok(Binary(BitwiseAnd)),
+            '^'                   => Ok(Binary(BitwiseXor)),
+            '≪'                   => Ok(Binary(ShiftLeft)),
+            '≫'                   => Ok(Binary(ShiftRight)),
             '<'                   => Err(BadOperatorHint('<', "<<")),
             '>'                   => Err(BadOperatorHint('>', ">>")),
             x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
         },
         UnaryOperation(x, _offset) => match x {
-            '!' => Ok(UnaryNot),
-            '-' => Ok(UnaryMinus),
-            '+' => Ok(UnaryPlus),
+            '!' => Ok(Unary(Not)),
+            '-' => Ok(Unary(Minus)),
+            '+' => Ok(Unary(Plus)),
             x   => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
         },
         x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by rpn_operator."))),
