@@ -1,4 +1,5 @@
 /// Module containing the function to parse math expressions.
+mod rpn_stack_manipulation;
 mod solve;
 mod parse;
 mod utils;

@@ -7,6 +7,7 @@ use crate::BinaryOp;
 use crate::UnaryOp;
 use crate::BinaryOp::*;
 use crate::UnaryOp::*;
+use crate::rpn_stack_manipulation::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
@@ -27,46 +28,16 @@ fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number
     }
 }
 
-/// Pop one number from the stack.
-fn pop_one(number_stack: &mut Vec<Number>) -> Result<Number, MathParseErrors> {
-    if let Some(num) = number_stack.pop() {
-        Ok(num)
-    } else {
-        Err(MathParseInternalBug(format!("Error, unable to pop one, no element on the stack.")))
-    }
-}
-
-/// Pop two numbers from the stack.
-fn pop_two(number_stack: &mut Vec<Number>) -> Result<(Number, Number), MathParseErrors> {
-    let num_1 = if let Some(n) = number_stack.pop() {
-        n
-    } else {
-        return Err(MathParseInternalBug(format!("Error, unable to pop two, no element on the stack.")));
-    };
-    let num_2 = if let Some(n) = number_stack.pop() {
-        n
-    } else {
-        return Err(MathParseInternalBug(format!("Error, unable to pop two, only one element on the stack.")));
-    };
-    Ok((num_2, num_1))
-}
-
-/// Execute the given unary operation on the top element of the stack.
-fn compute_unary(number_stack: &mut Vec<Number>, op: UnaryOp) -> Result<(), MathParseErrors> {
-    let num = pop_one(number_stack)?;
-    let computed = match op {
+fn compute_unary(num: Number, op: UnaryOp) -> Result<Number, MathParseErrors> {
+    Ok(match op {
         UnaryOp::Not => (!num)?,
         Minus        => Int(-1) * num,
         Plus         => num,
-    };
-    number_stack.push(computed);
-    Ok(())
+    })
 }
 
-/// Execute the given binary operation on the top two elements of the stack.
-fn compute_binary(number_stack: &mut Vec<Number>, op: BinaryOp) -> Result<(), MathParseErrors> {
-    let (num_1, num_2) = pop_two(number_stack)?;
-    let computed = match op {
+fn compute_binary(num_1: Number, num_2: Number, op: BinaryOp) -> Result<Number, MathParseErrors> {
+    Ok(match op {
         Multiplication  => num_1 * num_2,
         Division        => (num_1 / num_2)?,
         IntegerDivision => num_1.integer_div(num_2)?,
@@ -78,34 +49,15 @@ fn compute_binary(number_stack: &mut Vec<Number>, op: BinaryOp) -> Result<(), Ma
         BitwiseAnd      => (num_1 & num_2)?,
         BitwiseOr       => (num_1 | num_2)?,
         BitwiseXor      => (num_1 ^ num_2)?,
-    };
-    number_stack.push(computed);
-    Ok(())
+    })
 }
 
-/// Execute a single RPN action and update the stack of numbers accordingly.
-fn exec_rpn_action(number_stack: &mut Vec<Number>, action: &RPN, map: Option<&HashMap<String, String>>) -> Result<(), MathParseErrors> {
-    match action {
-        RPN::Name(x) => {
-            number_stack.push(read_name(x, map)?);
-            Ok(())
-        },
-        Unary(op) => compute_unary(number_stack, *op),
-        Binary(op) => compute_binary(number_stack, *op),
-    }
-}
-
-/// Reads a line of math that contains only values, operations, and parenthesis
-/// and returns a computed result.
 pub fn math_solve(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
+    let mut compute_name = | name: &str | -> Result<Number, MathParseErrors> {
+        read_name(name, map)
+    };
 
-    let mut number_stack = Vec::<Number>::new();
-
-    for action in rpn_actions {
-        exec_rpn_action(&mut number_stack, action, map)?;
-    }
-
-    pop_one(&mut number_stack)
+    exec_rpn(rpn_actions, &mut Box::new(compute_name), &compute_unary, &compute_binary)
 }
 
 /* --------------------------------- Numbers -------------------------------- */
