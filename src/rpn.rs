@@ -13,7 +13,7 @@ enum RPNSteps {
     OperatorStep(usize),
 } use RPNSteps::*;
 
-pub fn parse_rpn<'a>(line: &[MathValue<'a>]) -> Result<Vec<RPN<'a>>, MathParseErrors> {
+pub fn parse_rpn(line: &[MathValue]) -> Result<Vec<RPN>, MathParseErrors> {
     let mut rpn_steps = vec![Solve(0)];
     let mut ret = Vec::<RPN>::new();
     while rpn_steps.len() != 0 {
@@ -22,7 +22,7 @@ pub fn parse_rpn<'a>(line: &[MathValue<'a>]) -> Result<Vec<RPN<'a>>, MathParseEr
     Ok(ret)
 }
 
-fn rpn_run_step<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN<'a>>) -> Result<(), MathParseErrors> {
+fn rpn_run_step(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN>) -> Result<(), MathParseErrors> {
     match rpn_steps.pop() {
         Some(Solve(index)) => rpn_solve(line, rpn_steps, rpn_ret, index),
         Some(OperatorStep(index)) => rpn_operator(line, rpn_ret, index),
@@ -30,10 +30,10 @@ fn rpn_run_step<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_r
     }
 }
 
-fn rpn_solve<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN<'a>>, index: usize) -> Result<(), MathParseErrors> {
+fn rpn_solve(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN>, index: usize) -> Result<(), MathParseErrors> {
     match &line[index] {
         MathValue::Name(name) => {
-            rpn_ret.push(RPN::Name(name));
+            rpn_ret.push(RPN::Name(name.clone()));
         },
         Operation(_char, offset_1, offset_2) => {
             rpn_steps.push(OperatorStep(index));
@@ -57,13 +57,13 @@ fn rpn_solve<'a>(line: &[MathValue<'a>], rpn_steps: &mut Vec<RPNSteps>, rpn_ret:
     Ok(())
 }
 
-fn rpn_operator<'a>(line: &[MathValue<'a>], rpn_ret: &mut Vec<RPN<'a>>, index: usize) -> Result<(), MathParseErrors> {
+fn rpn_operator(line: &[MathValue], rpn_ret: &mut Vec<RPN>, index: usize) -> Result<(), MathParseErrors> {
     let to_push = read_operator(line, index)?;
     rpn_ret.push(to_push);
     Ok(())
 }
 
-fn read_operator<'a>(line: &[MathValue<'a>], index: usize) -> Result<RPN<'a>, MathParseErrors> {
+fn read_operator(line: &[MathValue], index: usize) -> Result<RPN, MathParseErrors> {
     match &line[index] {
         Operation(x, _offset_1, _offset_2) => match x {
             '*' | '×' | '·'       => Ok(Binary(Multiplication)),

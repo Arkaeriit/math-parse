@@ -150,8 +150,8 @@ pub enum BinaryOp {
 /// Elements that make a list of RPN instruction extracted from a math
 /// expression.
 #[derive(Debug, PartialEq)]
-pub enum RPN<'a> {
-    Name(&'a str),
+pub enum RPN {
+    Name(String),
     Unary(UnaryOp),
     Binary(BinaryOp),
 }
@@ -167,9 +167,9 @@ pub enum RPN<'a> {
 ///
 /// assert_eq!(
 ///     math_parse::parse_rpn("3-4+(-5)"),
-///     Ok(vec![Name("3"), Name("4"), Binary(Subtraction), Name("5"), Unary(Minus), Binary(Addition)]));
+///     Ok(vec![Name("3".to_string()), Name("4".to_string()), Binary(Subtraction), Name("5".to_string()), Unary(Minus), Binary(Addition)]));
 /// ```
-pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseErrors> {
+pub fn parse_rpn(expression: &str) -> Result<Vec<RPN>, MathParseErrors> {
     let parsed = math_parse(expression)?;
     rpn::parse_rpn(&parsed)
 }
@@ -177,14 +177,27 @@ pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseError
 /* ------------------------------ Tree notation ----------------------------- */
 
 #[derive(Debug, PartialEq)]
-pub enum Tree<'a> {
-    Name(&'a str),
-    Unary(UnaryOp, Box<Tree<'a>>),
-    Binary(BinaryOp, Box<Tree<'a>>, Box<Tree<'a>>),
+pub enum Tree {
+    Name(String),
+    Unary(UnaryOp, Box<Tree>),
+    Binary(BinaryOp, Box<Tree>, Box<Tree>),
 }
 
 
 /* --------------------------------- Testing -------------------------------- */
+
+#[cfg(test)]
+fn name_r(s: &str) -> RPN {
+    RPN::Name(s.to_string())
+}
+#[cfg(test)]
+fn name_p(s: &str) -> parse::MathValue {
+    parse::MathValue::Name(s.to_string())
+}
+#[cfg(test)]
+fn name_t(s: &str) -> Tree {
+    Tree::Name(s.to_string())
+}
 
 #[test]
 fn test_math_compute() {
@@ -295,7 +308,7 @@ fn test_rpn() {
     use RPN::*;
     use UnaryOp::*;
     use BinaryOp::*;
-    assert_eq!(parse_rpn("8/2").unwrap(), vec![Name("8"), Name("2"), Binary(Division)]);
-    assert_eq!(parse_rpn("-3+4").unwrap(), vec![Name("3"), Unary(Minus), Name("4"), Binary(Addition)]);
+    assert_eq!(parse_rpn("8/2").unwrap(), vec![name_r("8"), name_r("2"), Binary(Division)]);
+    assert_eq!(parse_rpn("-3+4").unwrap(), vec![name_r("3"), Unary(Minus), name_r("4"), Binary(Addition)]);
 }
 

@@ -54,7 +54,7 @@ fn exec_rpn_one_action<T>(number_stack: &mut Vec<T>, action: &RPN,
    compute_name: &mut NameExecFc<T>, compute_unary: &UnaryExecFn<T>, compute_binary: &BinaryExecFn<T>) -> Result<(), MathParseErrors> {
     match action {
         Name(x) => {
-            number_stack.push(compute_name(x)?);
+            number_stack.push(compute_name(&x)?);
             Ok(())
         },
         Unary(op) => execute_unary(number_stack, *op, compute_unary),

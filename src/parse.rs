@@ -5,11 +5,11 @@ use crate::utils::*;
 const MATH_CHARS: [char; 23] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~', '^', '&', '|', '≪', '<', '>', '≫'];
 
 #[derive(Debug, PartialEq)]
-pub enum MathValue<'a> {
+pub enum MathValue {
     // Values used in parsing
     /// A slice of the input string. As only a single string is used, the single
     /// lifetime for the reference is well suited.
-    Name(&'a str), 
+    Name(String), 
     /// A character from the MATH_CHAR list.
     Operator(char),
 
@@ -37,10 +37,10 @@ pub enum MathValue<'a> {
 use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
-fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
+fn math_token(s: &str) -> Result<Vec<MathValue>, MathParseErrors> {
 
     /// Reads name and operators in a line of math.
-    fn token_base<'a>(s: &'a str) -> Vec<MathValue<'a>> {
+    fn token_base(s: &str) -> Vec<MathValue> {
         let mut ret = Vec::<MathValue>::new();
         let mut new_name_index = !0; // Word that we are writing, !0 indicate we were not writing anything.
         let mut current_index = 0;
@@ -48,7 +48,7 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
         for c in s.chars() {
             if is_in(c, &MATH_CHARS) {
                 if new_name_index != !0 { // We were writing a work
-                    ret.push(Name(&s[new_name_index..current_index]));
+                    ret.push(Name(remove_whitespace(&s[new_name_index..current_index])));
                     new_name_index = !0;
                 }
                 ret.push(Operator(c));
@@ -59,7 +59,7 @@ fn math_token<'a>(s: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
         }
 
         if new_name_index != !0 { // We were writing a work
-            ret.push(Name(&s[new_name_index..]));
+            ret.push(Name(remove_whitespace(&s[new_name_index..])));
         }
         ret.push(TrailingError);
         ret
@@ -370,7 +370,7 @@ fn math_parse_tokens(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 }
 
 /// Tokenize and then parse a math expression.
-pub fn math_parse<'a>(expression: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
+pub fn math_parse(expression: &str) -> Result<Vec<MathValue>, MathParseErrors> {
     let mut tokens = math_token(expression)?;
     math_parse_tokens(&mut tokens)?;
     Ok(tokens)
@@ -378,6 +378,11 @@ pub fn math_parse<'a>(expression: &'a str) -> Result<Vec<MathValue<'a>>, MathPar
 
 
 /* ---------------------------------- Utils --------------------------------- */
+
+/// From a str, return a String with no whitespace.
+fn remove_whitespace(s: &str) -> String {
+    s.replace(&['\t', ' ', '\n', '\r', ' '][..], "")
+}
 
 /// Return true if the element is in the slice
 fn is_in<T: Eq>(a: T, set: &[T]) -> bool {
@@ -396,10 +401,13 @@ pub fn contains_math_char(s: &str) -> bool {
 
 /* --------------------------------- Testing -------------------------------- */
 
+#[cfg(test)]
+use crate::name_p;
+
 #[test]
 fn test_math_token() {
     let math_line = "+4/88*toto";
-    assert_eq!(math_token(math_line).unwrap(), vec![Operator('+'), Name("4"), Operator('/'), Name("88"), Operator('*'), Name("toto"), TrailingError]);
+    assert_eq!(math_token(math_line).unwrap(), vec![Operator('+'), name_p("4"), Operator('/'), name_p("88"), Operator('*'), name_p("toto"), TrailingError]);
 }
 
 #[test]
@@ -407,12 +415,12 @@ fn test_math_parse() {
     let math_line = "+88+89";
     let mut tokens = math_token(math_line).unwrap();
     math_parse_tokens(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 2, 3), Name("88"), UnaryOperation('+', -1), Name("89"), TrailingError]);
+    assert_eq!(tokens, vec![Operation('+', 2, 3), name_p("88"), UnaryOperation('+', -1), name_p("89"), TrailingError]);
 
     let math_line = "-1*2+-3*4";
     let mut tokens = math_token(math_line).unwrap();
     math_parse_tokens(&mut tokens).unwrap();
-    assert_eq!(tokens, vec![Operation('+', 4, 5), Name("1"), UnaryOperation('-', -1), Name("2"), Operation('*', -2, -1), Operation('*', 2, 3), Name("3"), UnaryOperation('-', -1), Name("4"), TrailingError]);
+    assert_eq!(tokens, vec![Operation('+', 4, 5), name_p("1"), UnaryOperation('-', -1), name_p("2"), Operation('*', -2, -1), Operation('*', 2, 3), name_p("3"), UnaryOperation('-', -1), name_p("4"), TrailingError]);
 
     let math_line = "(1+2)*(3+4)";
     let mut tokens = math_token(math_line).unwrap();
@@ -420,14 +428,14 @@ fn test_math_parse() {
     assert_eq!(tokens, vec![
                Operation('*', 5, 6),
                Operation('+', 1, 2),
-               Name("1"),
-               Name("2"),
+               name_p("1"),
+               name_p("2"),
                ParenClose(3),
                ParenOpen(-4),
                ParenOpen(1),
                Operation('+', 1, 2),
-               Name("3"),
-               Name("4"),
+               name_p("3"),
+               name_p("4"),
                ParenClose(3),
                TrailingError]);
 

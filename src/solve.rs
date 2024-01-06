@@ -346,7 +346,8 @@ fn test_read_named_variables() {
 
 #[test]
 fn test_math_compute() {
-    let rpn_actions = [Name("4"), Name("3"), Name("5"), Binary(Subtraction), Binary(Multiplication)];
+    use crate::name_r;
+    let rpn_actions = [name_r("4"), name_r("3"), name_r("5"), Binary(Subtraction), Binary(Multiplication)];
     let computation = math_solve(&rpn_actions, None).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);
