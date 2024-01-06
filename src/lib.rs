@@ -2,6 +2,7 @@
 mod solve;
 mod parse;
 mod utils;
+mod tree;
 mod rpn;
 
 use solve::*;
@@ -171,6 +172,16 @@ pub fn parse_rpn<'a>(expression: &'a str) -> Result<Vec<RPN<'a>>, MathParseError
     let parsed = math_parse(expression)?;
     rpn::parse_rpn(&parsed)
 }
+
+/* ------------------------------ Tree notation ----------------------------- */
+
+#[derive(Debug, PartialEq)]
+pub enum Tree<'a> {
+    Name(&'a str),
+    Unary(UnaryOp, Box<Tree<'a>>),
+    Binary(BinaryOp, Box<Tree<'a>>, Box<Tree<'a>>),
+}
+
 
 /* --------------------------------- Testing -------------------------------- */
 
