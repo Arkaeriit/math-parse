@@ -48,10 +48,10 @@ pub fn execute_binary<T>(number_stack: &mut Vec<T>, op: BinaryOp, exec: &BinaryE
     Ok(())
 }
 
-type NameExecFc<'a, T> = dyn FnMut(&str) -> Result<T, MathParseErrors> + 'a;
+type NameExecFc<'a, T> = dyn Fn(&str) -> Result<T, MathParseErrors> + 'a;
 /// Execute a single RPN action and update the stack of numbers accordingly.
 fn exec_rpn_one_action<T>(number_stack: &mut Vec<T>, action: &RPN,
-   compute_name: &mut NameExecFc<T>, compute_unary: &UnaryExecFn<T>, compute_binary: &BinaryExecFn<T>) -> Result<(), MathParseErrors> {
+   compute_name: &NameExecFc<T>, compute_unary: &UnaryExecFn<T>, compute_binary: &BinaryExecFn<T>) -> Result<(), MathParseErrors> {
     match action {
         Name(x) => {
             number_stack.push(compute_name(&x)?);
@@ -63,7 +63,7 @@ fn exec_rpn_one_action<T>(number_stack: &mut Vec<T>, action: &RPN,
 }
 
 /// Execute all RPN actions and return the single element left in the stack.
-pub fn exec_rpn<T>(rpn_actions: &[RPN], compute_name: &mut NameExecFc<T>, compute_unary: &UnaryExecFn<T>, compute_binary: &BinaryExecFn<T>) -> Result<T, MathParseErrors> {
+pub fn exec_rpn<T>(rpn_actions: &[RPN], compute_name: &NameExecFc<T>, compute_unary: &UnaryExecFn<T>, compute_binary: &BinaryExecFn<T>) -> Result<T, MathParseErrors> {
     let mut number_stack = Vec::<T>::new();
 
     for action in rpn_actions {

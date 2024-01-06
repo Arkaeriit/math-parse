@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
 use crate::RPN;
-use crate::RPN::*;
 use crate::BinaryOp;
 use crate::UnaryOp;
 use crate::BinaryOp::*;
@@ -53,11 +52,11 @@ fn compute_binary(num_1: Number, num_2: Number, op: BinaryOp) -> Result<Number, 
 }
 
 pub fn math_solve(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
-    let mut compute_name = | name: &str | -> Result<Number, MathParseErrors> {
+    let compute_name = | name: &str | -> Result<Number, MathParseErrors> {
         read_name(name, map)
     };
 
-    exec_rpn(rpn_actions, &mut Box::new(compute_name), &compute_unary, &compute_binary)
+    exec_rpn(rpn_actions, &Box::new(compute_name), &compute_unary, &compute_binary)
 }
 
 /* --------------------------------- Numbers -------------------------------- */
@@ -346,6 +345,7 @@ fn test_read_named_variables() {
 
 #[test]
 fn test_math_compute() {
+    use crate::RPN::*;
     use crate::name_r;
     let rpn_actions = [name_r("4"), name_r("3"), name_r("5"), Binary(Subtraction), Binary(Multiplication)];
     let computation = math_solve(&rpn_actions, None).unwrap();

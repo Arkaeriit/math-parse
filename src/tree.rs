@@ -2,8 +2,6 @@ use crate::Tree;
 use crate::Tree::*;
 use crate::RPN;
 use crate::MathParseErrors;
-use crate::MathParseErrors::*;
-use crate::utils::*;
 use crate::BinaryOp;
 use crate::UnaryOp;
 use crate::rpn_stack_manipulation::*;
@@ -22,11 +20,11 @@ fn compute_binary(num_1: Tree, num_2: Tree, op: BinaryOp) -> Result<Tree, MathPa
 /// Reads a line of math that contains only values, operations, and parenthesis
 /// and returns a computed result.
 pub fn parse_to_tree(rpn_actions: &[RPN]) -> Result<Tree, MathParseErrors> {
-    let mut compute_name = | name: &str | -> Result<Tree, MathParseErrors> {
+    let compute_name = | name: &str | -> Result<Tree, MathParseErrors> {
         Ok(Name(name.to_string()))
     };
 
-    exec_rpn(rpn_actions, &mut Box::new(compute_name), &compute_unary, &compute_binary)
+    exec_rpn(rpn_actions, &Box::new(compute_name), &compute_unary, &compute_binary)
 }
 
 /* --------------------------------- Testing -------------------------------- */

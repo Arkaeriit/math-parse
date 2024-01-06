@@ -184,6 +184,11 @@ pub enum Tree {
 }
 
 
+pub fn parse_tree(expression: &str) -> Result<Tree, MathParseErrors> {
+    let rpn = parse_rpn(expression)?;
+    tree::parse_to_tree(&rpn)
+}
+
 /* --------------------------------- Testing -------------------------------- */
 
 #[cfg(test)]
