@@ -16,14 +16,15 @@ use std::collections::HashMap;
 /// Object generated when parsing a string of math. Can be later used for
 /// solving or formatting to other representations.
 pub struct ParsedMath {
-    // Internal representation of parsed math is the infix one. Might or might
+    // Internal representation of parsed math is the RPN one. Might or might
     // not change in the future.
-    internal: Vec<tokenize::MathValue>
+    internal: Vec<RPN>
 }
 
 impl ParsedMath {
     pub fn parse(expression: &str) -> Result<Self, MathParseErrors> {
-        let internal = math_parse(expression)?;
+        let parsed_tree = math_parse(expression)?;
+        let internal = rpn::parse_rpn(&parsed_tree)?;
         Ok(ParsedMath{internal})
     }
 }
@@ -36,8 +37,7 @@ impl ParsedMath {
     /// `Ok(Ok(int))`. If it can only be a float, return it as `Ok(Err(floar))`.
     /// If it can't be solved, return `Err(error)`.
     pub fn solve_auto(&self, map: Option<&HashMap<String, String>>) -> Result<Result<i64, f64>, MathParseErrors> {
-        let rpn = self.to_rpn()?;
-        match math_solve(&rpn, map) {
+        match math_solve(&self.internal, map) {
             Ok(Number::Int(i))   => Ok(Ok(i)),
             Ok(Number::Float(f)) => Ok(Err(f)),
             Err(err)             => Err(err),
@@ -219,7 +219,7 @@ impl BinaryOp {
 
 /// Elements that make a list of RPN instruction extracted from a math
 /// expression.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RPN {
     Name(String),
     Unary(UnaryOp),
@@ -242,13 +242,13 @@ impl ParsedMath {
     ///     Ok(vec![Name("3".to_string()), Name("4".to_string()), Binary(Subtraction), Name("5".to_string()), Unary(Minus), Binary(Addition)]));
     /// ```
     pub fn to_rpn(&self) -> Result<Vec<RPN>, MathParseErrors> {
-        rpn::parse_rpn(&self.internal)
+        Ok(self.internal.clone())
     }
 }
 
 /* ------------------------------ Tree notation ----------------------------- */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Tree {
     Name(String),
     Unary(UnaryOp, Box<Tree>),
@@ -258,8 +258,7 @@ pub enum Tree {
 
 impl ParsedMath {
     pub fn to_tree(&self) -> Result<Tree, MathParseErrors> {
-        let rpn = self.to_rpn()?;
-        tree::parse_to_tree(&rpn)
+        tree::parse_to_tree(&self.internal)
     }
 }
 
