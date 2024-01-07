@@ -1,5 +1,6 @@
 /// Module containing the function to parse math expressions.
 mod rpn_stack_manipulation;
+mod tokenize;
 mod solve;
 mod parse;
 mod utils;
@@ -17,7 +18,7 @@ use std::collections::HashMap;
 pub struct ParsedMath {
     // Internal representation of parsed math is the infix one. Might or might
     // not change in the future.
-    internal: Vec<parse::MathValue>
+    internal: Vec<tokenize::MathValue>
 }
 
 impl ParsedMath {
@@ -77,7 +78,7 @@ impl ParsedMath {
 /// Return true if the given string contains any character that are used as
 /// operators inside of math-parse
 pub fn contains_math_char(s: &str) -> bool {
-    parse::contains_math_char(s)
+    tokenize::contains_math_char(s)
 }
 
 /* --------------------------------- Errors --------------------------------- */
@@ -233,8 +234,8 @@ fn name_r(s: &str) -> RPN {
     RPN::Name(s.to_string())
 }
 #[cfg(test)]
-fn name_p(s: &str) -> parse::MathValue {
-    parse::MathValue::Name(s.to_string())
+fn name_p(s: &str) -> tokenize::MathValue {
+    tokenize::MathValue::Name(s.to_string())
 }
 #[cfg(test)]
 fn name_t(s: &str) -> Tree {

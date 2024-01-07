@@ -1,8 +1,8 @@
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
 use crate::utils::*;
-use crate::parse::*;
-use crate::parse::MathValue::*;
+use crate::tokenize::MathValue::*;
+use crate::tokenize::MathValue;
 use crate::RPN;
 use crate::RPN::*;
 use crate::BinaryOp::*;
