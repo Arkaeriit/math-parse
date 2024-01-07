@@ -1,6 +1,7 @@
 /// Module containing the function to parse math expressions.
 mod rpn_stack_manipulation;
 mod tokenize;
+mod parse_rpn;
 mod solve;
 mod parse;
 mod utils;
@@ -25,6 +26,11 @@ impl ParsedMath {
     pub fn parse(expression: &str) -> Result<Self, MathParseErrors> {
         let parsed_tree = math_parse(expression)?;
         let internal = rpn::parse_rpn(&parsed_tree)?;
+        Ok(ParsedMath{internal})
+    }
+
+    pub fn parse_rpn(expression: &str) -> Result<Self, MathParseErrors> {
+        let internal = parse_rpn::parse_rpn(expression)?;
         Ok(ParsedMath{internal})
     }
 }
@@ -135,6 +141,12 @@ pub enum MathParseErrors {
     /// There was an unwanted negative number.
     UnexpectedNegative,
 
+    /// An operator is not valid in the context of RPN parsing.
+    InvalidRPNOperator(char),
+
+    /// The number of elements on the RPN stack is not valid.
+    UnbalancedStack,
+
     /// This error should never be raised and should be reported to the
     /// library's maintainer.
     MathParseInternalBug(String),
@@ -158,6 +170,8 @@ impl fmt::Display for MathParseErrors {
             BadOperatorHint(c, s) => write!(f, "The operator '{c}' is invalid. Did you meant '{s}'?"),
             UnexpectedZero => write!(f, "There is a 0 in an operation where it is invalid such as a division or a remainder."),
             UnexpectedNegative => write!(f, "There is a negative number in an operation where it is invalid such as a logical shift."),
+            InvalidRPNOperator(c) => write!(f, "The operators {c} is not valid when parsing RPN expressions."),
+            UnbalancedStack => write!(f, "The RPN stack does not contains a valid number of elements. There is too much or not enough operators."),
             MathParseInternalBug(s) => write!(f, "There is a bug in the math-parse library. The error message is the following:\n{s}\nPlease, report it with the input given to the library to the developer of math-parse over here: https://github.com/Arkaeriit/math-parse"),
         }
     }
@@ -409,11 +423,23 @@ fn test_operator_hints() {
 }
 
 #[test]
-fn test_rpn() {
+fn test_to_rpn() {
     use RPN::*;
     use UnaryOp::*;
     use BinaryOp::*;
     assert_eq!(parse_rpn("8/2").unwrap(), vec![name_r("8"), name_r("2"), Binary(Division)]);
     assert_eq!(parse_rpn("-3+4").unwrap(), vec![name_r("3"), Unary(Minus), name_r("4"), Binary(Addition)]);
+}
+
+#[test]
+fn test_parse_rpn() {
+    fn solve_rpn(expression: &str) -> Result<i64, MathParseErrors> {
+        ParsedMath::parse_rpn(expression)?.solve_int(None)
+    }
+
+    assert_eq!(solve_rpn("3 4 + 2 *"), Ok(14));
+    assert_eq!(solve_rpn("3 4 2 + *"), Ok(18));
+    assert_eq!(solve_rpn("3 (4 + 3) 2 + *"), Err(InvalidRPNOperator('(')));
+    assert_eq!(solve_rpn("3 2 + *"), Err(UnbalancedStack));
 }
 

@@ -11,7 +11,7 @@ pub fn pop_one<T>(number_stack: &mut Vec<T>) -> Result<T, MathParseErrors> {
     if let Some(num) = number_stack.pop() {
         Ok(num)
     } else {
-        Err(MathParseInternalBug(format!("Error, unable to pop one, no element on the stack.")))
+        Err(UnbalancedStack)
     }
 }
 
@@ -20,12 +20,12 @@ pub fn pop_two<T>(number_stack: &mut Vec<T>) -> Result<(T, T), MathParseErrors> 
     let num_1 = if let Some(n) = number_stack.pop() {
         n
     } else {
-        return Err(MathParseInternalBug(format!("Error, unable to pop two, no element on the stack.")));
+        return Err(UnbalancedStack);
     };
     let num_2 = if let Some(n) = number_stack.pop() {
         n
     } else {
-        return Err(MathParseInternalBug(format!("Error, unable to pop two, only one element on the stack.")));
+        return Err(UnbalancedStack);
     };
     Ok((num_2, num_1))
 }
@@ -70,6 +70,24 @@ pub fn exec_rpn<T>(rpn_actions: &[RPN], compute_name: &NameExecFc<T>, compute_un
         exec_rpn_one_action(&mut number_stack, action, compute_name, compute_unary, compute_binary)?;
     }
 
-    pop_one(&mut number_stack)
+    if number_stack.len() == 1 {
+        pop_one(&mut number_stack)
+    } else {
+        Err(UnbalancedStack)
+    }
+}
+
+/* --------------------------------- Testing -------------------------------- */
+
+#[test]
+fn test_pop() {
+    let mut vec = vec!['a', 'b', 'c', 'd', 'e'];
+    assert_eq!(pop_two(&mut vec), Ok(('d', 'e')));
+    assert_eq!(pop_two(&mut vec), Ok(('b', 'c')));
+    assert_eq!(pop_two(&mut vec), Err(UnbalancedStack));
+    vec.push('a');
+    assert_eq!(pop_one(&mut vec), Ok('a'));
+    assert_eq!(pop_two(&mut vec), Err(UnbalancedStack));
+    assert_eq!(pop_one(&mut vec), Err(UnbalancedStack));
 }
 
