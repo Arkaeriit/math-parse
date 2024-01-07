@@ -20,7 +20,7 @@ fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number
     };
 
     if let Some(new_name) = map.get(&name.to_string()) {
-        let num = crate::compute(&new_name, None)?;
+        let num = crate::ParsedMath::parse(&new_name)?.solve_number(None)?;
         Ok(num)
     } else {
         number_from_string(name)

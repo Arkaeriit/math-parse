@@ -10,32 +10,65 @@ use solve::*;
 use parse::math_parse;
 use std::collections::HashMap;
 
-/* --------------------------------- Solving -------------------------------- */
+/* --------------------------------- Parsing -------------------------------- */
 
-/// Does all the computation from a string with a line of math to the final
-/// resulting number.
-fn compute(expression: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
-    let rpn = parse_rpn(expression)?;
-    math_solve(&rpn, map)
+/// Object generated when parsing a string of math. Can be later used for
+/// solving or formatting to other representations.
+pub struct ParsedMath {
+    // Internal representation of parsed math is the infix one. Might or might
+    // not change in the future.
+    internal: Vec<parse::MathValue>
 }
 
-/// Parse the expression given and apply the optional map of variable that maps
-/// variables to math expressions. Return an integer or error out if the result
-/// is a floating point number.
-pub fn math_solve_int(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
-    match compute(expression, variable_map)? {
-        Number::Int(i)   => Ok(i),
-        Number::Float(f) => Err(ReturnFloatExpectedInt(f)),
+impl ParsedMath {
+    pub fn parse(expression: &str) -> Result<Self, MathParseErrors> {
+        let internal = math_parse(expression)?;
+        Ok(ParsedMath{internal})
     }
 }
 
-/// Parse the expression given and apply the optional map of variable that maps
-/// variables to math expressions. Return a floating point number. If the result
-/// is an integer, convert it as a floating point number.
-pub fn math_solve_float(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<f64, MathParseErrors> {
-    match compute(expression, variable_map)? {
-        Number::Float(f) => Ok(f),
-        Number::Int(i)   => Ok(i as f64),
+/* --------------------------------- Solving -------------------------------- */
+
+impl ParsedMath {
+    /// Does all the computation from a string with a line of math to the final
+    /// resulting number. If the result can be an int, return it as
+    /// `Ok(Ok(int))`. If it can only be a float, return it as `Ok(Err(floar))`.
+    /// If it can't be solved, return `Err(error)`.
+    pub fn solve_auto(&self, map: Option<&HashMap<String, String>>) -> Result<Result<i64, f64>, MathParseErrors> {
+        let rpn = self.to_rpn()?;
+        match math_solve(&rpn, map) {
+            Ok(Number::Int(i))   => Ok(Ok(i)),
+            Ok(Number::Float(f)) => Ok(Err(f)),
+            Err(err)             => Err(err),
+        }
+    }
+
+    /// Parse the expression given and apply the optional map of variable that
+    /// maps variables to math expressions. Return an integer or error out if
+    /// the result is a floating point number.
+    pub fn solve_int(&self, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
+        match self.solve_auto(variable_map)? {
+            Ok(i)  => Ok(i),
+            Err(f) => Err(ReturnFloatExpectedInt(f)),
+        }
+    }
+
+    /// Parse the expression given and apply the optional map of variable that
+    /// maps variables to math expressions. Return a floating point number. If
+    /// the result is an integer, convert it as a floating point number.
+    pub fn solve_float(&self, variable_map: Option<&HashMap<String, String>>) -> Result<f64, MathParseErrors> {
+        match self.solve_auto(variable_map)? {
+            Ok(i)  => Ok(i as f64),
+            Err(f) => Ok(f),
+        }
+    }
+
+    /// Solve the result as a number, for internal use.
+    fn solve_number(&self, variable_map: Option<&HashMap<String, String>>) -> Result<solve::Number, MathParseErrors> {
+        Ok(match self.solve_auto(variable_map)? {
+            Ok(i)  => solve::Number::Int(i),
+            Err(f) => solve::Number::Float(f),
+        })
     }
 }
 
@@ -156,22 +189,24 @@ pub enum RPN {
     Binary(BinaryOp),
 }
 
-/// Parse a math expression into list of instructions in Reverse Polish
-/// notation (postfix notation).
-///
-/// Example:
-/// ```
-/// use math_parse::RPN::*;
-/// use math_parse::UnaryOp::*;
-/// use math_parse::BinaryOp::*;
-///
-/// assert_eq!(
-///     math_parse::parse_rpn("3-4+(-5)"),
-///     Ok(vec![Name("3".to_string()), Name("4".to_string()), Binary(Subtraction), Name("5".to_string()), Unary(Minus), Binary(Addition)]));
-/// ```
-pub fn parse_rpn(expression: &str) -> Result<Vec<RPN>, MathParseErrors> {
-    let parsed = math_parse(expression)?;
-    rpn::parse_rpn(&parsed)
+impl ParsedMath {
+    /// Parse a math expression into list of instructions in Reverse Polish
+    /// notation (postfix notation).
+    ///
+    /// Example:
+    /// ```
+    /// use math_parse::RPN::*;
+    /// use math_parse::UnaryOp::*;
+    /// use math_parse::BinaryOp::*;
+    /// use math_parse::ParsedMath;
+    ///
+    /// assert_eq!(
+    ///     ParsedMath::parse("3-4+(-5)").unwrap().to_rpn(),
+    ///     Ok(vec![Name("3".to_string()), Name("4".to_string()), Binary(Subtraction), Name("5".to_string()), Unary(Minus), Binary(Addition)]));
+    /// ```
+    pub fn to_rpn(&self) -> Result<Vec<RPN>, MathParseErrors> {
+        rpn::parse_rpn(&self.internal)
+    }
 }
 
 /* ------------------------------ Tree notation ----------------------------- */
@@ -184,9 +219,11 @@ pub enum Tree {
 }
 
 
-pub fn parse_tree(expression: &str) -> Result<Tree, MathParseErrors> {
-    let rpn = parse_rpn(expression)?;
-    tree::parse_to_tree(&rpn)
+impl ParsedMath {
+    pub fn to_tree(&self) -> Result<Tree, MathParseErrors> {
+        let rpn = self.to_rpn()?;
+        tree::parse_to_tree(&rpn)
+    }
 }
 
 /* --------------------------------- Testing -------------------------------- */
@@ -202,6 +239,23 @@ fn name_p(s: &str) -> parse::MathValue {
 #[cfg(test)]
 fn name_t(s: &str) -> Tree {
     Tree::Name(s.to_string())
+}
+
+#[cfg(test)]
+fn math_solve_int(expression: &str) -> Result<i64, MathParseErrors> {
+    ParsedMath::parse(expression)?.solve_int(None)
+}
+#[cfg(test)]
+fn math_solve_float(expression: &str) -> Result<f64, MathParseErrors> {
+    ParsedMath::parse(expression)?.solve_float(None)
+}
+#[cfg(test)]
+fn compute(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<solve::Number, MathParseErrors> {
+    ParsedMath::parse(expression)?.solve_number(variable_map)
+}
+#[cfg(test)]
+fn parse_rpn(expression: &str) -> Result<Vec<RPN>, MathParseErrors> {
+    ParsedMath::parse(expression)?.to_rpn()
 }
 
 #[test]
@@ -279,11 +333,11 @@ fn test_butchered_rpn() {
 
 #[test]
 fn test_api() {
-    assert_eq!(math_solve_int("3+3",     None), Ok(6));
-    assert_eq!(math_solve_int("3.0+3.0", None), Err(ReturnFloatExpectedInt(6.0)));
+    assert_eq!(math_solve_int("3+3"), Ok(6));
+    assert_eq!(math_solve_int("3.0+3.0"), Err(ReturnFloatExpectedInt(6.0)));
 
-    assert_eq!(math_solve_float("3+3",     None), Ok(6.0));
-    assert_eq!(math_solve_float("3.0+3.0", None), Ok(6.0));
+    assert_eq!(math_solve_float("3+3"    ), Ok(6.0));
+    assert_eq!(math_solve_float("3.0+3.0"), Ok(6.0));
 
     assert_eq!(contains_math_char("ab+cd"), true);
     assert_eq!(contains_math_char("abcd"), false);
@@ -293,7 +347,7 @@ fn test_api() {
 fn test_bitwise_on_float() {
     fn test_operator(op: char) {
         let exp = format!("3.1{op}4.2");
-        assert_eq!(math_solve_int(&exp, None), Err(BinaryOpOnFloat(3.1, op)));
+        assert_eq!(math_solve_int(&exp), Err(BinaryOpOnFloat(3.1, op)));
     }
 
     let operators = ['^', '|', '&', '≪', '≫'];
@@ -304,8 +358,8 @@ fn test_bitwise_on_float() {
 
 #[test]
 fn test_operator_hints() {
-    assert_eq!(math_solve_int("3876<4", None), Err(BadOperatorHint('<', "<<")));
-    assert_eq!(math_solve_int("3876>4", None), Err(BadOperatorHint('>', ">>")));
+    assert_eq!(math_solve_int("3876<4"), Err(BadOperatorHint('<', "<<")));
+    assert_eq!(math_solve_int("3876>4"), Err(BadOperatorHint('>', ">>")));
 }
 
 #[test]

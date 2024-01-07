@@ -5,22 +5,18 @@ extern crate math_parse;
 fn main() {
     let args = concat_cli_arg();
 
-    match math_parse::math_solve_int(&args, None) {
-        Ok(i) => {
+    let parsed = math_parse::ParsedMath::parse(&args);
+    let solved = match parsed {
+        Ok(x)  => x.solve_auto(None),
+        Err(x) => Err(x),
+    };
+
+    match solved {
+        Ok(Ok(i)) => {
             println!("{i}");
             std::process::exit(0);
         },
-        Err(math_parse::MathParseErrors::ReturnFloatExpectedInt(_)) => {
-            // We will proceed to the next match statement that handles floats.
-        },
-        Err(x) => {
-            println!("{x}");
-            std::process::exit(1);
-        },
-    }
-
-    match math_parse::math_solve_float(&args, None) {
-        Ok(f) => {
+        Ok(Err(f)) => {
             println!("{f}");
             std::process::exit(0);
         },
