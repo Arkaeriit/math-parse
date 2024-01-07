@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
 use crate::RPN;
@@ -12,14 +11,8 @@ use crate::rpn_stack_manipulation::*;
 
 /// Reads a Names and transform any name being a key in the map to it's value.
 /// If map is None, nothing is done.
-fn read_name(name: &str, map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
-    let map = if let Some(m) = map {
-        m
-    } else {
-        return number_from_string(name);
-    };
-
-    if let Some(new_name) = map.get(&name.to_string()) {
+fn read_name(name: &str, map: &dyn Fn(&str) -> Option<String>) -> Result<Number, MathParseErrors> {
+    if let Some(new_name) = map(name) {
         let num = crate::ParsedMath::parse(&new_name)?.solve_number(None)?;
         Ok(num)
     } else {
@@ -51,7 +44,7 @@ fn compute_binary(num_1: Number, num_2: Number, op: BinaryOp) -> Result<Number, 
     })
 }
 
-pub fn math_solve(rpn_actions: &[RPN], map: Option<&HashMap<String, String>>) -> Result<Number, MathParseErrors> {
+pub fn math_solve(rpn_actions: &[RPN], map: &dyn Fn(&str) -> Option<String>) -> Result<Number, MathParseErrors> {
     let compute_name = | name: &str | -> Result<Number, MathParseErrors> {
         read_name(name, map)
     };
@@ -331,16 +324,19 @@ fn test_reading_numbers() {
 
 #[test]
 fn test_read_named_variables() {
-    let variables = HashMap::from([
-        ("direct_1".to_string(), "1.0".to_string()),
-        ("indirect_3".to_string(), "2".to_string()),
-        ("indirect_2".to_string(), "indirect_3".to_string()),
-        ("indirect_1".to_string(), "indirect_2".to_string()),
-    ]);
-    assert_eq!(read_name("3",          Some(&variables)), Ok(Int(3)));
-    assert_eq!(read_name("direct_1",   Some(&variables)), Ok(Float(1.0)));
-    assert_eq!(read_name("indirect_1", Some(&variables)), Err(InvalidNumber("indirect_2".to_string())));
-    assert_eq!(read_name("direct_1",   None),             Err(InvalidNumber("direct_1".to_string())));
+    fn variables(s: &str) -> Option<String> {
+        match s {
+            "direct_1"   => Some("1.0".to_string()),
+            "indirect_3" => Some("2".to_string()),
+            "indirect_2" => Some("indirect_3".to_string()),
+            "indirect_1" => Some("indirect_2".to_string()),
+            _            => None,
+        }
+    }
+
+    assert_eq!(read_name("3",          &variables), Ok(Int(3)));
+    assert_eq!(read_name("direct_1",   &variables), Ok(Float(1.0)));
+    assert_eq!(read_name("indirect_1", &variables), Err(InvalidNumber("indirect_2".to_string())));
 }
 
 #[test]
@@ -348,7 +344,8 @@ fn test_math_compute() {
     use crate::RPN::*;
     use crate::name_r;
     let rpn_actions = [name_r("4"), name_r("3"), name_r("5"), Binary(Subtraction), Binary(Multiplication)];
-    let computation = math_solve(&rpn_actions, None).unwrap();
+    fn no_map(_: &str) -> Option<String> {None}
+    let computation = math_solve(&rpn_actions, &no_map).unwrap();
     if let Int(computation) = computation {
         assert_eq!(computation, (3-5)*4);
     } else {

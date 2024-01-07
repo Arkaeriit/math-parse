@@ -37,7 +37,17 @@ impl ParsedMath {
     /// `Ok(Ok(int))`. If it can only be a float, return it as `Ok(Err(floar))`.
     /// If it can't be solved, return `Err(error)`.
     pub fn solve_auto(&self, map: Option<&HashMap<String, String>>) -> Result<Result<i64, f64>, MathParseErrors> {
-        match math_solve(&self.internal, map) {
+        let map_function = |s: &str| -> Option<String> {
+            match map {
+                None => None,
+                Some(x) => match x.get(s) {
+                    Some(x) => Some(x.clone()),
+                    None => None,
+                },
+            }
+        };
+
+        match math_solve(&self.internal, &map_function) {
             Ok(Number::Int(i))   => Ok(Ok(i)),
             Ok(Number::Float(f)) => Ok(Err(f)),
             Err(err)             => Err(err),
@@ -270,7 +280,7 @@ fn name_r(s: &str) -> RPN {
 }
 #[cfg(test)]
 fn name_p(s: &str) -> tokenize::MathValue {
-    tokenize::MathValue::Name(s.to_string())
+    tokenize::MathValue::Name(s)
 }
 #[cfg(test)]
 fn name_t(s: &str) -> Tree {
@@ -325,7 +335,7 @@ fn test_math_compute() {
     
     compute_int("((3+3)·b+8)*(a-1)", ((3+3)*b+8)*(a-1));
     compute_int("0", 0);
-    compute_int("-a+b−c", -a+b-c);
+    compute_int("-a + b − c", -a + b - c);
     compute_int("-−-+++-a", ----a);
     compute_int("3%8+99", 3%8+99);
     compute_int("10.0//3.0", 10/3);

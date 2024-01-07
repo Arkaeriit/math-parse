@@ -274,7 +274,7 @@ fn math_parse_tokens(line: &mut [MathValue]) -> Result<(), MathParseErrors> {
 }
 
 /// Tokenize and then parse a math expression.
-pub fn math_parse(expression: &str) -> Result<Vec<MathValue>, MathParseErrors> {
+pub fn math_parse<'a>(expression: &'a str) -> Result<Vec<MathValue<'a>>, MathParseErrors> {
     let mut tokens = math_token(expression);
     math_parse_tokens(&mut tokens)?;
     Ok(tokens)

@@ -1,11 +1,11 @@
 const MATH_CHARS: [char; 23] = ['+', '-', '−', '*', '×', '·', '/', '∕', '⁄', '÷', '(', ')', '%', '⟌', '!', '~', '^', '&', '|', '≪', '<', '>', '≫'];
 
 #[derive(Debug, PartialEq)]
-pub enum MathValue {
+pub enum MathValue<'a> {
     // Values used in parsing
     /// A slice of the input string. As only a single string is used, the single
     /// lifetime for the reference is well suited.
-    Name(String), 
+    Name(&'a str),
     /// A character from the MATH_CHAR list.
     Operator(char),
 
@@ -33,10 +33,10 @@ pub enum MathValue {
 use MathValue::*;
 
 /// Tokenise a line of math expression into a vector of `MathValue`.
-pub fn math_token(s: &str) -> Vec<MathValue> {
+pub fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
 
     /// Reads name and operators in a line of math.
-    fn token_base(s: &str) -> Vec<MathValue> {
+    fn token_base<'a>(s: &'a str) -> Vec<MathValue<'a>> {
         let mut ret = Vec::<MathValue>::new();
         let mut new_name_index = !0; // Word that we are writing, !0 indicate we were not writing anything.
         let mut current_index = 0;
@@ -44,7 +44,7 @@ pub fn math_token(s: &str) -> Vec<MathValue> {
         for c in s.chars() {
             if is_in(c, &MATH_CHARS) {
                 if new_name_index != !0 { // We were writing a work
-                    ret.push(Name(remove_whitespace(&s[new_name_index..current_index])));
+                    ret.push(Name(&s[new_name_index..current_index]));
                     new_name_index = !0;
                 }
                 ret.push(Operator(c));
@@ -55,7 +55,7 @@ pub fn math_token(s: &str) -> Vec<MathValue> {
         }
 
         if new_name_index != !0 { // We were writing a work
-            ret.push(Name(remove_whitespace(&s[new_name_index..])));
+            ret.push(Name(&s[new_name_index..]));
         }
         ret.push(TrailingError);
         ret
@@ -98,11 +98,6 @@ pub fn math_token(s: &str) -> Vec<MathValue> {
 }
 
 /* ---------------------------------- Utils --------------------------------- */
-
-/// From a str, return a String with no whitespace.
-fn remove_whitespace(s: &str) -> String {
-    s.replace(&['\t', ' ', '\n', '\r', ' '][..], "")
-}
 
 /// Return true if the element is in the slice
 fn is_in<T: Eq>(a: T, set: &[T]) -> bool {

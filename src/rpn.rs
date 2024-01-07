@@ -33,7 +33,7 @@ fn rpn_run_step(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut
 fn rpn_solve(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN>, index: usize) -> Result<(), MathParseErrors> {
     match &line[index] {
         MathValue::Name(name) => {
-            rpn_ret.push(RPN::Name(name.clone()));
+            rpn_ret.push(RPN::Name(remove_whitespace(name)));
         },
         Operation(_char, offset_1, offset_2) => {
             rpn_steps.push(OperatorStep(index));
@@ -79,4 +79,8 @@ fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseError
     i_to_u(index_i + offset)
 }
 
+/// From a str, return a String with no whitespace.
+fn remove_whitespace(s: &str) -> String {
+    s.replace(&['\t', ' ', '\n', '\r', ' '][..], "")
+}
 
