@@ -5,8 +5,8 @@ use crate::tokenize::MathValue::*;
 use crate::tokenize::MathValue;
 use crate::RPN;
 use crate::RPN::*;
-use crate::BinaryOp::*;
-use crate::UnaryOp::*;
+use crate::BinaryOp;
+use crate::UnaryOp;
 
 enum RPNSteps {
     Solve(usize),
@@ -65,28 +65,8 @@ fn rpn_operator(line: &[MathValue], rpn_ret: &mut Vec<RPN>, index: usize) -> Res
 
 fn read_operator(line: &[MathValue], index: usize) -> Result<RPN, MathParseErrors> {
     match &line[index] {
-        Operation(x, _offset_1, _offset_2) => match x {
-            '*' | '×' | '·'       => Ok(Binary(Multiplication)),
-            '/' | '∕' | '⁄' | '÷' => Ok(Binary(Division)),
-            '+'                   => Ok(Binary(Addition)),
-            '-' | '−'             => Ok(Binary(Subtraction)),
-            '%'                   => Ok(Binary(Reminder)),
-            '⟌'                   => Ok(Binary(IntegerDivision)),
-            '|'                   => Ok(Binary(BitwiseOr)),
-            '&'                   => Ok(Binary(BitwiseAnd)),
-            '^'                   => Ok(Binary(BitwiseXor)),
-            '≪'                   => Ok(Binary(ShiftLeft)),
-            '≫'                   => Ok(Binary(ShiftRight)),
-            '<'                   => Err(BadOperatorHint('<', "<<")),
-            '>'                   => Err(BadOperatorHint('>', ">>")),
-            x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
-        },
-        UnaryOperation(x, _offset) => match x {
-            '!' => Ok(Unary(Not)),
-            '-' => Ok(Unary(Minus)),
-            '+' => Ok(Unary(Plus)),
-            x   => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
-        },
+        Operation(x, _offset_1, _offset_2) => Ok(Binary(BinaryOp::from_char(*x)?)),
+        UnaryOperation(x, _offset) => Ok(Unary(UnaryOp::from_char(*x)?)),
         x => Err(MathParseInternalBug(format!("{x:?} should not have been handled by rpn_operator."))),
     }
 }

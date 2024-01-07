@@ -162,6 +162,19 @@ pub enum UnaryOp {
     Minus,
     Plus
 }
+use crate::UnaryOp::*;
+
+impl UnaryOp {
+
+    fn from_char(c: char) -> Result<Self, MathParseErrors> {
+        match c {
+            '!' => Ok(Not),
+            '-' => Ok(Minus),
+            '+' => Ok(Plus),
+            x   => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
+        }
+    }
+}
 
 /// Available binary operations.
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -177,6 +190,29 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+}
+use crate::BinaryOp::*;
+
+impl BinaryOp {
+
+    fn from_char(c: char) -> Result<Self, MathParseErrors> {
+        match c {
+            '*' | '×' | '·'       => Ok(Multiplication),
+            '/' | '∕' | '⁄' | '÷' => Ok(Division),
+            '+'                   => Ok(Addition),
+            '-' | '−'             => Ok(Subtraction),
+            '%'                   => Ok(Reminder),
+            '⟌'                   => Ok(IntegerDivision),
+            '|'                   => Ok(BitwiseOr),
+            '&'                   => Ok(BitwiseAnd),
+            '^'                   => Ok(BitwiseXor),
+            '≪'                   => Ok(ShiftLeft),
+            '≫'                   => Ok(ShiftRight),
+            '<'                   => Err(BadOperatorHint('<', "<<")),
+            '>'                   => Err(BadOperatorHint('>', ">>")),
+            x                     => Err(MathParseInternalBug(format!("{x} is not a valid operator."))),
+        }
+    }
 }
 
 /* ----------------------------------- RPN ---------------------------------- */
