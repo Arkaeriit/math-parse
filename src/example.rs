@@ -5,7 +5,7 @@ extern crate math_parse;
 fn main() {
     let args = concat_cli_arg();
 
-    let parsed = math_parse::ParsedMath::parse(&args);
+    let parsed = math_parse::MathParse::parse(&args);
     let solved = match parsed {
         Ok(x)  => x.solve_auto(None),
         Err(x) => Err(x),

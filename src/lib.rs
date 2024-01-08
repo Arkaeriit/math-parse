@@ -17,32 +17,59 @@ use number_conversion::*;
 
 /// Object generated when parsing a string of math. Can be later used for
 /// solving or formatting to other representations.
-pub struct ParsedMath {
+pub struct MathParse {
     // Internal representation of parsed math is the RPN one. Might or might
     // not change in the future.
     internal: Vec<RPN>
 }
 
-impl ParsedMath {
+impl MathParse {
+    /// Parse a math expression in infix notation.
+    ///
+    /// ```
+    /// math_parse::MathParse::parse("3 + 4").unwrap();
+    /// ```
     pub fn parse(expression: &str) -> Result<Self, MathParseErrors> {
         let parsed_tree = math_parse(expression)?;
         let internal = rpn::parse_rpn(&parsed_tree)?;
-        Ok(ParsedMath{internal})
+        Ok(MathParse{internal})
     }
 
+    /// Parse a math expression in postfix notation (RPN).
+    ///
+    /// ```
+    /// math_parse::MathParse::parse_rpn("3 4 +").unwrap();
+    /// ```
     pub fn parse_rpn(expression: &str) -> Result<Self, MathParseErrors> {
         let internal = parse_rpn::parse_rpn(expression)?;
-        Ok(ParsedMath{internal})
+        Ok(MathParse{internal})
     }
 }
 
 /* --------------------------------- Solving -------------------------------- */
 
-impl ParsedMath {
+impl MathParse {
     /// Does all the computation from a string with a line of math to the final
     /// resulting number. If the result can be an int, return it as
     /// `Ok(Ok(int))`. If it can only be a float, return it as `Ok(Err(floar))`.
     /// If it can't be solved, return `Err(error)`.
+    ///
+    /// ```
+    /// use math_parse::MathParse;
+    /// use math_parse::MathParseErrors::*;
+    ///
+    /// assert_eq!(
+    ///     MathParse::parse("3 + 8.0").unwrap().solve_auto(None),
+    ///     Ok(Ok(11)));
+    /// assert_eq!(
+    ///     MathParse::parse("3 - 8.5").unwrap().solve_auto(None),
+    ///     Ok(Err(-5.5)));
+    /// assert_eq!(
+    ///     MathParse::parse("34 + bcd").unwrap().solve_auto(None),
+    ///     Err(InvalidNumber("bcd".to_string())));
+    /// ```
+    ///
+    /// A optional map of variable name can be taken as argument.
     pub fn solve_auto(&self, map: Option<&HashMap<String, String>>) -> Result<Result<i64, f64>, MathParseErrors> {
         let map_function = |s: &str| -> Option<String> {
             match map {
@@ -67,9 +94,33 @@ impl ParsedMath {
         }
     }
 
-    /// Parse the expression given and apply the optional map of variable that
-    /// maps variables to math expressions. Return an integer or error out if
-    /// the result is a floating point number.
+    /// Does all the computation from a string with a line of math to the final
+    /// resulting number. If the result can be an int, return it as
+    /// `Ok(int)`. If it can't be solved as an int, return `Err(error)`.
+    ///
+    /// ```
+    /// use math_parse::MathParse;
+    /// use math_parse::MathParseErrors::*;
+    ///
+    /// assert_eq!(
+    ///     MathParse::parse("3 + 8.0").unwrap().solve_int(None),
+    ///     Ok(11));
+    /// assert_eq!(
+    ///     MathParse::parse("3 - 8.5").unwrap().solve_int(None),
+    ///     Err(ReturnFloatExpectedInt(-5.5)));
+    /// ```
+    ///
+    /// A optional map of variable name can be taken as argument:
+    /// ```
+    /// use math_parse::MathParse;
+    ///
+    /// let variables = std::collections::HashMap::from([
+    ///     ("a".to_string(), "1".to_string()),
+    ///     ("b".to_string(), "3*3".to_string()),
+    /// ]);
+    /// let result = MathParse::parse("a+b").unwrap().solve_int(Some(&variables)).unwrap();
+    /// assert_eq!(result, 10);
+    /// ```
     pub fn solve_int(&self, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
         match self.solve_auto(variable_map)? {
             Ok(i)  => Ok(i),
@@ -77,9 +128,23 @@ impl ParsedMath {
         }
     }
 
-    /// Parse the expression given and apply the optional map of variable that
-    /// maps variables to math expressions. Return a floating point number. If
-    /// the result is an integer, convert it as a floating point number.
+    /// Does all the computation from a string with a line of math to the final
+    /// resulting number. The result is returned as a `Ok(f64)`.
+    /// If it can't be solved, return `Err(error)`.
+    ///
+    /// ```
+    /// use math_parse::MathParse;
+    /// use math_parse::MathParseErrors::*;
+    ///
+    /// assert_eq!(
+    ///     MathParse::parse("3 + 8").unwrap().solve_float(None),
+    ///     Ok(11.0));
+    /// assert_eq!(
+    ///     MathParse::parse("3 - 8.5").unwrap().solve_float(None),
+    ///     Ok(-5.5));
+    /// ```
+    ///
+    /// A optional map of variable name can be taken as argument.
     pub fn solve_float(&self, variable_map: Option<&HashMap<String, String>>) -> Result<f64, MathParseErrors> {
         match self.solve_auto(variable_map)? {
             Ok(i)  => Ok(i as f64),
@@ -100,6 +165,13 @@ impl ParsedMath {
 
 /// Return true if the given string contains any character that are used as
 /// operators inside of math-parse
+///
+/// Example:
+/// ```
+/// use math_parse::contains_math_char;
+/// assert_eq!(contains_math_char("abcd"), false);
+/// assert_eq!(contains_math_char("ab+cd"), true);
+/// ```
 pub fn contains_math_char(s: &str) -> bool {
     tokenize::contains_math_char(s)
 }
@@ -163,6 +235,8 @@ use MathParseErrors::*;
 use std::fmt;
 
 impl fmt::Display for MathParseErrors {
+    /// From a `MathParseError`, makes an error message that could even be
+    /// shown to the final user.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UnclosedParenthesis => write!(f, "A parenthesis was opened but never closed."),
@@ -293,7 +367,7 @@ impl fmt::Display for RPN {
     }
 }
 
-impl ParsedMath {
+impl MathParse {
     /// Parse a math expression into list of instructions in Reverse Polish
     /// notation (postfix notation).
     ///
@@ -302,10 +376,10 @@ impl ParsedMath {
     /// use math_parse::RPN::*;
     /// use math_parse::UnaryOp::*;
     /// use math_parse::BinaryOp::*;
-    /// use math_parse::ParsedMath;
+    /// use math_parse::MathParse;
     ///
     /// assert_eq!(
-    ///     ParsedMath::parse("3-4+(-5)").unwrap().to_rpn(),
+    ///     MathParse::parse("3-4+(-5)").unwrap().to_rpn(),
     ///     Ok(vec![Name("3".to_string()), Name("4".to_string()), Binary(Subtraction), Name("5".to_string()), Unary(Minus), Binary(Addition)]));
     /// ```
     pub fn to_rpn(&self) -> Result<Vec<RPN>, MathParseErrors> {
@@ -318,7 +392,7 @@ impl ParsedMath {
 /// Example:
 /// ```
 /// use math_parse::*;
-/// let rpn = ParsedMath::parse("3+1*2").unwrap().to_rpn().unwrap();
+/// let rpn = MathParse::parse("3+1*2").unwrap().to_rpn().unwrap();
 /// assert_eq!(
 ///     rpn_slice_to_string(&rpn),
 ///     "3 1 2 * +".to_string());
@@ -345,7 +419,26 @@ pub enum Tree {
 }
 
 
-impl ParsedMath {
+impl MathParse {
+    /// Parse a math expression into list of instructions as a Tree (infix
+    /// notation).
+    ///
+    /// Example:
+    /// ```
+    /// use math_parse::Tree::*;
+    /// use math_parse::UnaryOp::*;
+    /// use math_parse::BinaryOp::*;
+    /// use math_parse::MathParse;
+    ///
+    /// assert_eq!(
+    ///     MathParse::parse("3*4+(-5)").unwrap().to_tree(),
+    ///     Ok(Binary(Addition,
+    ///         Box::new(Binary(Multiplication,
+    ///             Box::new(Name("3".to_string())),
+    ///             Box::new(Name("4".to_string())))),
+    ///         Box::new(Unary(Minus,
+    ///             Box::new(Name("5".to_string())))))));
+    /// ```
     pub fn to_tree(&self) -> Result<Tree, MathParseErrors> {
         tree::parse_to_tree(&self.internal)
     }
@@ -358,7 +451,7 @@ impl fmt::Display for Tree {
     /// ```
     /// use math_parse::*;
     /// assert_eq!(
-    ///     format!("{}", ParsedMath::parse("(2+3)*2/5").unwrap().to_tree().unwrap()),
+    ///     format!("{}", MathParse::parse("(2+3)*2/5").unwrap().to_tree().unwrap()),
     ///     "(((2 + 3) * 2) / 5)".to_string());
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -411,19 +504,19 @@ fn name_t(s: &str) -> Tree {
 
 #[cfg(test)]
 fn math_solve_int(expression: &str) -> Result<i64, MathParseErrors> {
-    ParsedMath::parse(expression)?.solve_int(None)
+    MathParse::parse(expression)?.solve_int(None)
 }
 #[cfg(test)]
 fn math_solve_float(expression: &str) -> Result<f64, MathParseErrors> {
-    ParsedMath::parse(expression)?.solve_float(None)
+    MathParse::parse(expression)?.solve_float(None)
 }
 #[cfg(test)]
 fn compute(expression: &str, variable_map: Option<&HashMap<String, String>>) -> Result<solve::Number, MathParseErrors> {
-    ParsedMath::parse(expression)?.solve_number(variable_map)
+    MathParse::parse(expression)?.solve_number(variable_map)
 }
 #[cfg(test)]
 fn parse_rpn(expression: &str) -> Result<Vec<RPN>, MathParseErrors> {
-    ParsedMath::parse(expression)?.to_rpn()
+    MathParse::parse(expression)?.to_rpn()
 }
 
 #[test]
@@ -546,7 +639,7 @@ fn test_to_rpn() {
 #[test]
 fn test_parse_rpn() {
     fn solve_rpn(expression: &str) -> Result<i64, MathParseErrors> {
-        ParsedMath::parse_rpn(expression)?.solve_int(None)
+        MathParse::parse_rpn(expression)?.solve_int(None)
     }
 
     assert_eq!(solve_rpn("3 4 + 2 *"), Ok(14));
@@ -557,10 +650,23 @@ fn test_parse_rpn() {
 
 #[test]
 fn test_misc_errors() {
-    match ParsedMath::parse("3 3 +") {
+    match MathParse::parse("3 3 +") {
         Err(EmptyLine) => {/* Expected */},
         Ok(_) => {panic!("Should not have been solved.");},
         Err(x) => {panic!("Should not have been {x:?}");},
     }
 }
 
+#[test]
+fn test_readme_example() {
+    let num1: i64 = MathParse::parse("(1+2)*3").unwrap().solve_int(None).unwrap();
+    assert_eq!(num1, 9); // Prints 9
+
+    let num2: f64 = MathParse::parse("5/8+6").unwrap().solve_float(None).unwrap();
+    assert_eq!(num2, 6.625); // Prints 6.625
+
+    let parsed = MathParse::parse("(2+3)*2/5").unwrap().to_tree().unwrap();
+    assert_eq!(
+        format!("{parsed}").as_str(),
+        "(((2 + 3) * 2) / 5)".to_string());
+}

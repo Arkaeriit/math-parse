@@ -14,7 +14,7 @@ use crate::number_conversion::*;
 /// If map is None, nothing is done.
 fn read_name(name: &str, map: &dyn Fn(&str) -> Option<String>) -> Result<Number, MathParseErrors> {
     if let Some(new_name) = map(name) {
-        let num = crate::ParsedMath::parse(&new_name)?.solve_number(None)?;
+        let num = crate::MathParse::parse(&new_name)?.solve_number(None)?;
         Ok(num)
     } else {
         number_from_string(name)
