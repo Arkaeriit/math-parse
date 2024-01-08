@@ -33,7 +33,12 @@ fn rpn_run_step(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut
 fn rpn_solve(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Vec<RPN>, index: usize) -> Result<(), MathParseErrors> {
     match &line[index] {
         MathValue::Name(name) => {
-            rpn_ret.push(RPN::Name(remove_whitespace(name)));
+            let no_whitespace = remove_whitespace(name);
+            if no_whitespace != "" {
+                rpn_ret.push(RPN::Name(no_whitespace));
+            } else {
+                rpn_steps.push(Solve(index+1));
+            }
         },
         Operation(_char, offset_1, offset_2) => {
             rpn_steps.push(OperatorStep(index));

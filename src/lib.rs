@@ -411,6 +411,7 @@ pub fn rpn_slice_to_string(rpn: &[RPN]) -> String {
 
 /* ------------------------------ Tree notation ----------------------------- */
 
+/// Parsed element showed in a tree in infix notation. 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Tree {
     Name(String),
@@ -655,6 +656,8 @@ fn test_misc_errors() {
         Ok(_) => {panic!("Should not have been solved.");},
         Err(x) => {panic!("Should not have been {x:?}");},
     }
+
+    assert_eq!(compute("1 - (1*3)", None), Ok(Number::Int(-2)));
 }
 
 #[test]
