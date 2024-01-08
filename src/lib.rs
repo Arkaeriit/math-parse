@@ -189,13 +189,22 @@ pub enum UnaryOp {
 use crate::UnaryOp::*;
 
 impl UnaryOp {
-
     fn from_char(c: char) -> Result<Self, MathParseErrors> {
         match c {
             '!' => Ok(Not),
             '-' => Ok(Minus),
             '+' => Ok(Plus),
             x   => Err(MathParseInternalBug(format!("{x} is not a valid unary operator."))),
+        }
+    }
+}
+
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Not   => write!(f, "!"),
+            Minus => write!(f, "-"),
+            Plus  => write!(f, "+"),
         }
     }
 }
@@ -218,7 +227,6 @@ pub enum BinaryOp {
 use crate::BinaryOp::*;
 
 impl BinaryOp {
-
     fn from_char(c: char) -> Result<Self, MathParseErrors> {
         match c {
             '*' | '×' | '·'       => Ok(Multiplication),
@@ -239,6 +247,24 @@ impl BinaryOp {
     }
 }
 
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Multiplication  => write!(f, "*"),
+            Division        => write!(f, "/"),
+            IntegerDivision => write!(f, "//"),
+            Reminder        => write!(f, "%"),
+            Addition        => write!(f, "+"),
+            Subtraction     => write!(f, "-"),
+            ShiftLeft       => write!(f, "<<"),
+            ShiftRight      => write!(f, ">>"),
+            BitwiseAnd      => write!(f, "&"),
+            BitwiseOr       => write!(f, "|"),
+            BitwiseXor      => write!(f, "⊕"), // Not ^ in order not to mistake it for exponentiation.
+        }
+    }
+}
+
 /* ----------------------------------- RPN ---------------------------------- */
 
 /// Elements that make a list of RPN instruction extracted from a math
@@ -248,6 +274,16 @@ pub enum RPN {
     Name(String),
     Unary(UnaryOp),
     Binary(BinaryOp),
+}
+
+impl fmt::Display for RPN {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RPN::Name(x)   => write!(f, "{x}"),
+            RPN::Unary(x)  => write!(f, "{x}"),
+            RPN::Binary(x) => write!(f, "{x}"),
+        }
+    }
 }
 
 impl ParsedMath {
@@ -270,6 +306,28 @@ impl ParsedMath {
     }
 }
 
+/// Shows a representation of an expression formatted into RPN.
+///
+/// Example:
+/// ```
+/// use math_parse::*;
+/// let rpn = ParsedMath::parse("3+1*2").unwrap().to_rpn().unwrap();
+/// assert_eq!(
+///     rpn_slice_to_string(&rpn),
+///     "3 1 2 * +".to_string());
+/// ```
+pub fn rpn_slice_to_string(rpn: &[RPN]) -> String {
+    let mut ret = String::new();
+    if rpn.len() == 0 {
+        return ret;
+    }
+    ret.push_str(&format!("{}", rpn[0]));
+    for i in 1..rpn.len() {
+        ret.push_str(&format!(" {}", rpn[i]));
+    }
+    ret
+}
+
 /* ------------------------------ Tree notation ----------------------------- */
 
 #[derive(Debug, PartialEq, Clone)]
@@ -283,6 +341,49 @@ pub enum Tree {
 impl ParsedMath {
     pub fn to_tree(&self) -> Result<Tree, MathParseErrors> {
         tree::parse_to_tree(&self.internal)
+    }
+}
+
+impl fmt::Display for Tree {
+    /// Show a tree as an infix expression.
+    ///
+    /// Example:
+    /// ```
+    /// use math_parse::*;
+    /// assert_eq!(
+    ///     format!("{}", ParsedMath::parse("(2+3)*2/5").unwrap().to_tree().unwrap()),
+    ///     "(((2 + 3) * 2) / 5)".to_string());
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        enum TreeFmt {
+            S(String),
+            T(Tree),
+        } use TreeFmt::*;
+        use Tree::*;
+
+        let mut to_format = vec![T(self.clone())];
+        while to_format.len() != 0 {
+            match to_format.pop().unwrap() {
+                T(Name(s)) => {
+                    write!(f, "{s}")?;
+                },
+                T(Unary(op, next)) => {
+                    to_format.push(T(*next));
+                    write!(f, "{op}")?;
+                },
+                T(Binary(op, next_1, next_2)) => {
+                    write!(f, "(")?;
+                    to_format.push(S(")".to_string()));
+                    to_format.push(T(*next_2));
+                    to_format.push(S(format!(" {op} ")));
+                    to_format.push(T(*next_1));
+                },
+                S(s) => {
+                    write!(f, "{s}")?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -441,5 +542,14 @@ fn test_parse_rpn() {
     assert_eq!(solve_rpn("3 4 2 + *"), Ok(18));
     assert_eq!(solve_rpn("3 (4 + 3) 2 + *"), Err(InvalidRPNOperator('(')));
     assert_eq!(solve_rpn("3 2 + *"), Err(UnbalancedStack));
+}
+
+#[test]
+fn test_misc_errors() {
+    match ParsedMath::parse("3 3 +") {
+        Err(EmptyLine) => {/* Expected */},
+        Ok(_) => {panic!("Should not have been solved.");},
+        Err(x) => {panic!("Should not have been {x:?}");},
+    }
 }
 
