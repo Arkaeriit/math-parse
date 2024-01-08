@@ -48,7 +48,7 @@ pub fn math_token<'a>(s: &'a str) -> Vec<MathValue<'a>> {
                     new_name_index = !0;
                 }
                 ret.push(Operator(c));
-            } else if new_name_index == !0 {
+            } else if new_name_index == !0 && !c.is_whitespace() {
                 new_name_index = current_index;
             }
             current_index += c.len_utf8();

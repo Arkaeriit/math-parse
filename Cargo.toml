@@ -1,6 +1,6 @@
 [package]
 name = "math-parse"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 authors = ["Maxime Bouillot maxbouillot@gmail.com"]
 license = "BSD-3-Clause"

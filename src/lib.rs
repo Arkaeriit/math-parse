@@ -658,6 +658,8 @@ fn test_misc_errors() {
     }
 
     assert_eq!(compute("1 - (1*3)", None), Ok(Number::Int(-2)));
+    assert_eq!(compute("1+-1", None), Ok(Number::Int(0)));
+    assert_eq!(compute("1 + - 1", None), Ok(Number::Int(0)));
 }
 
 #[test]

@@ -34,11 +34,7 @@ fn rpn_solve(line: &[MathValue], rpn_steps: &mut Vec<RPNSteps>, rpn_ret: &mut Ve
     match &line[index] {
         MathValue::Name(name) => {
             let no_whitespace = remove_whitespace(name);
-            if no_whitespace != "" {
-                rpn_ret.push(RPN::Name(no_whitespace));
-            } else {
-                rpn_steps.push(Solve(index+1));
-            }
+            rpn_ret.push(RPN::Name(no_whitespace));
         },
         Operation(_char, offset_1, offset_2) => {
             rpn_steps.push(OperatorStep(index));
