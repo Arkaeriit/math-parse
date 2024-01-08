@@ -1,9 +1,9 @@
 use crate::tokenize::MathValue::*;
 use crate::tokenize::math_token;
 use crate::tokenize::MathValue;
+use crate::number_conversion::*;
 use crate::MathParseErrors::*;
 use crate::MathParseErrors;
-use crate::utils::*;
 
 /// Parse a line of `MathValue` and make it into a tree of operations.
 /// The root of the tree will be kept as the first element of the vector.

@@ -1,16 +1,17 @@
 /// Module containing the function to parse math expressions.
 mod rpn_stack_manipulation;
-mod tokenize;
+mod number_conversion;
 mod parse_rpn;
+mod tokenize;
 mod solve;
 mod parse;
-mod utils;
 mod tree;
 mod rpn;
 
 use solve::*;
 use parse::math_parse;
 use std::collections::HashMap;
+use number_conversion::*;
 
 /* --------------------------------- Parsing -------------------------------- */
 
@@ -54,9 +55,15 @@ impl ParsedMath {
         };
 
         match math_solve(&self.internal, &map_function) {
-            Ok(Number::Int(i))   => Ok(Ok(i)),
-            Ok(Number::Float(f)) => Ok(Err(f)),
             Err(err)             => Err(err),
+            Ok(Number::Int(i))   => Ok(Ok(i)),
+            Ok(Number::Float(f)) => Ok(
+                if let Ok(i) = f_to_i_strict(f) {
+                    Ok(i)
+                } else {
+                    Err(f)
+                }
+            ),
         }
     }
 
@@ -66,7 +73,7 @@ impl ParsedMath {
     pub fn solve_int(&self, variable_map: Option<&HashMap<String, String>>) -> Result<i64, MathParseErrors> {
         match self.solve_auto(variable_map)? {
             Ok(i)  => Ok(i),
-            Err(f) => Err(ReturnFloatExpectedInt(f)),
+            Err(f) => Ok(f_to_i_strict(f)?),
         }
     }
 
@@ -441,10 +448,13 @@ fn test_math_compute() {
 
     fn compute_float (input: &str, output: f64) {
         let res = compute(input, None).unwrap();
-        if let Number::Float(res) = res {
-            assert_eq!(res, output);
-        } else {
-            panic!("Expected float instead of integer.");
+        match res {
+            Number::Float(res) => {
+                assert_eq!(res, output);
+            },
+            Number::Int(res) => {
+                assert_eq!(res as f64, output);
+            },
         }
     }
     
@@ -495,7 +505,8 @@ fn test_butchered_rpn() {
 #[test]
 fn test_api() {
     assert_eq!(math_solve_int("3+3"), Ok(6));
-    assert_eq!(math_solve_int("3.0+3.0"), Err(ReturnFloatExpectedInt(6.0)));
+    assert_eq!(math_solve_int("3.0+3.0"), Ok(6));
+    assert_eq!(math_solve_int("3.2+3.0"), Err(ReturnFloatExpectedInt(6.2)));
 
     assert_eq!(math_solve_float("3+3"    ), Ok(6.0));
     assert_eq!(math_solve_float("3.0+3.0"), Ok(6.0));

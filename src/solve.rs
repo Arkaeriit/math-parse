@@ -6,6 +6,7 @@ use crate::UnaryOp;
 use crate::BinaryOp::*;
 use crate::UnaryOp::*;
 use crate::rpn_stack_manipulation::*;
+use crate::number_conversion::*;
 
 /* ---------------------------------- Maths --------------------------------- */
 
@@ -289,28 +290,6 @@ fn number_from_string(s: &str) -> Result<Number, MathParseErrors> {
     }
 }
 
-/// Convert a float to an integer
-const INTEGRAL_LIMIT: f64 = 9007199254740992.0;
-fn f_to_i(f: f64) -> Result<i64, MathParseErrors> {
-    if f.is_nan() {
-        return Err(IntConversion(f));
-    }
-    let f = f.round();
-
-    if f > INTEGRAL_LIMIT {
-        Err(IntConversion(f))
-    } else if f < -1.0 * INTEGRAL_LIMIT {
-        Err(IntConversion(f))
-    } else {
-        Ok(f as i64)
-    }
-}
-
-/// Convert an integer to a float
-fn i_to_f(i: i64) -> f64 {
-    i as f64
-}
-
 /* --------------------------------- Testing -------------------------------- */
 
 #[test]
@@ -326,7 +305,7 @@ fn test_reading_numbers() {
 fn test_read_named_variables() {
     fn variables(s: &str) -> Option<String> {
         match s {
-            "direct_1"   => Some("1.0".to_string()),
+            "direct_1"   => Some("1.2".to_string()),
             "indirect_3" => Some("2".to_string()),
             "indirect_2" => Some("indirect_3".to_string()),
             "indirect_1" => Some("indirect_2".to_string()),
@@ -335,7 +314,7 @@ fn test_read_named_variables() {
     }
 
     assert_eq!(read_name("3",          &variables), Ok(Int(3)));
-    assert_eq!(read_name("direct_1",   &variables), Ok(Float(1.0)));
+    assert_eq!(read_name("direct_1",   &variables), Ok(Float(1.2)));
     assert_eq!(read_name("indirect_1", &variables), Err(InvalidNumber("indirect_2".to_string())));
 }
 

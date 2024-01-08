@@ -1,6 +1,6 @@
 use crate::MathParseErrors;
 use crate::MathParseErrors::*;
-use crate::utils::*;
+use crate::number_conversion::*;
 use crate::tokenize::MathValue::*;
 use crate::tokenize::MathValue;
 use crate::RPN;
