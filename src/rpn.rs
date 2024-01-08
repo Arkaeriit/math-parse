@@ -82,6 +82,6 @@ fn add_index_offset(index: usize, offset: isize) -> Result<usize, MathParseError
 
 /// From a str, return a String with no whitespace.
 fn remove_whitespace(s: &str) -> String {
-    s.replace(&['\t', ' ', '\n', '\r', ' '][..], "")
+    s.chars().filter(|x| !x.is_whitespace()).collect::<String>()
 }
 
