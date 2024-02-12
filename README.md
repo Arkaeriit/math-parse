@@ -2,7 +2,7 @@
 
 A robust and polyvalent library to parse or compute of a math expressions.
 
-Math-Parse has been made with robustness in mind. Unlike other Rust math parsing library, Math-Parse can handle arbitrary big input without stack overflow. A lot of case have been put to ensure that the program can never panic, instead, errors are reported using a custom error type.
+Math-Parse has been made with robustness in mind. Unlike other Rust math parsing library, Math-Parse can handle arbitrary big input without stack overflow. A lot of care have been put to ensure that the program can never panic, instead, errors are reported using a custom error type.
 
 ## Example of use
 
